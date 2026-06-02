@@ -2,12 +2,14 @@ const std = @import("std");
 
 pub const DHCPPacket = struct {
     bootp_header: *BootpHeader,
+    lease_duration: i32,
 
-    pub fn init(bootp_header: *BootpHeader) DHCPPacket {
-        return .{ .bootp_header = bootp_header };
+    pub fn init(bootp_header: *BootpHeader, lease_duration: i32) DHCPPacket {
+        return .{ .bootp_header = bootp_header, .lease_duration = lease_duration };
     }
 
     pub fn write_to_buf(self: *DHCPPacket, out: []u8) !void {
+        const ld_as_bytes = std.mem.asBytes(&self.lease_duration);
         if (out.len < 236) return error.BufferTooSmall;
 
         out[0] = self.bootp_header.op;
@@ -44,10 +46,10 @@ pub const DHCPPacket = struct {
         out[254] = 0;
         out[255] = 51;
         out[256] = 4;
-        out[257] = 0;
-        out[258] = 0;
-        out[259] = 0x0E;
-        out[260] = 0x10;
+        out[257] = ld_as_bytes[0];
+        out[258] = ld_as_bytes[1];
+        out[259] = ld_as_bytes[2];
+        out[260] = ld_as_bytes[3];
         out[261] = 3;
         out[262] = 4;
         out[263] = 192;
@@ -149,7 +151,7 @@ pub fn main(init: std.process.Init) !void {
                     bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
                     bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header);
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, 50);
                     try dhcp_packet.write_to_buf(&offer_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..268]);
@@ -165,7 +167,7 @@ pub fn main(init: std.process.Init) !void {
                     bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
                     bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header);
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, 50);
                     try dhcp_packet.write_to_buf(&ack_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..268]);
