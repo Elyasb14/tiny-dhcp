@@ -1,0 +1,73 @@
+const std = @import("std");
+
+const Args = @This();
+
+lease_addr: [4]u8 = .{ 192, 168, 33, 7 },
+lease_duration: u32 = 50,
+
+pub fn parse(init: std.process.Init) !Args {
+    var result: Args = .{};
+
+    var it = try std.process.Args.Iterator.initAllocator(init.minimal.args, init.arena.allocator());
+    defer it.deinit();
+
+    const process_name = it.next() orelse "tiny-dhcp";
+
+    while (it.next()) |arg_z| {
+        const arg: []const u8 = arg_z;
+
+        if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
+            help(process_name);
+        } else if (std.mem.eql(u8, arg, "--lease-addr")) {
+            const raw = it.next() orelse {
+                std.log.err("--lease-addr requires an IPv4 address", .{});
+                help(process_name);
+            };
+            result.lease_addr = try parse_ipv4(raw);
+        } else if (std.mem.eql(u8, arg, "--lease-duration")) {
+            const raw = it.next() orelse {
+                std.log.err("--lease-duration requires a number of seconds", .{});
+                help(process_name);
+            };
+            result.lease_duration = std.fmt.parseInt(u32, raw, 10) catch {
+                std.log.err("invalid --lease-duration: {s}", .{raw});
+                help(process_name);
+            };
+        } else {
+            std.log.err("unknown option: {s}", .{arg});
+            help(process_name);
+        }
+    }
+
+    return result;
+}
+
+fn parse_ipv4(raw: []const u8) ![4]u8 {
+    var it = std.mem.splitScalar(u8, raw, '.');
+    var ip: [4]u8 = undefined;
+
+    var idx: usize = 0;
+    while (idx < 4) : (idx += 1) {
+        const part = it.next() orelse return error.InvalidIp;
+        ip[idx] = std.fmt.parseInt(u8, part, 10) catch return error.InvalidIp;
+    }
+
+    if (it.next() != null) return error.InvalidIp;
+    return ip;
+}
+
+fn help(process_name: []const u8) noreturn {
+    std.debug.print(
+        \\Usage: {s} [OPTIONS]
+        \\
+        \\OPTIONS:
+        \\  --lease-addr <ipv4>      IP to offer/ack (default: 192.168.33.7)
+        \\  --lease-duration <secs>  Lease time in seconds (default: 50)
+        \\  -h, --help               Show this help message
+        \\
+        \\EXAMPLE:
+        \\  {s} --lease-addr 192.168.33.10 --lease-duration 3600
+        \\
+    , .{ process_name, process_name });
+    std.process.exit(0);
+}

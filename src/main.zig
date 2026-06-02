@@ -1,4 +1,5 @@
 const std = @import("std");
+const Args = @import("Args.zig");
 
 pub const DHCPPacketType = enum(u8) {
     OFFER = 2,
@@ -112,6 +113,7 @@ const DHCP_OPTIONS_OFFSET: usize = 240;
 const DHCP_MAGIC_COOKIE = [4]u8{ 0x63, 0x82, 0x53, 0x63 };
 
 pub fn main(init: std.process.Init) !void {
+    const args = try Args.parse(init);
     const io = init.io;
     const addr = try std.Io.net.IpAddress.parse("0.0.0.0", 67);
 
@@ -156,11 +158,11 @@ pub fn main(init: std.process.Init) !void {
                     @memset(&offer_buf, 0);
 
                     bootp_header.op = BOOTP_OP_REPLY;
-                    bootp_header.yiaddr = &[_]u8{ 192, 168, 33, 7 };
+                    bootp_header.yiaddr = args.lease_addr[0..];
                     bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
                     bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header, 50, .OFFER);
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER);
                     try dhcp_packet.write_to_buf(&offer_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..268]);
@@ -172,11 +174,11 @@ pub fn main(init: std.process.Init) !void {
                     @memset(&ack_buf, 0);
 
                     bootp_header.op = BOOTP_OP_REPLY;
-                    bootp_header.yiaddr = &[_]u8{ 192, 168, 33, 7 };
+                    bootp_header.yiaddr = args.lease_addr[0..];
                     bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
                     bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header, 50, .ACK);
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK);
                     try dhcp_packet.write_to_buf(&ack_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..268]);

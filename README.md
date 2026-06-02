@@ -8,6 +8,12 @@ run:
 zig build && ./zig-out/bin/tiny-dhcp
 ```
 
+optional flags:
+
+```bash
+./zig-out/bin/tiny-dhcp --lease-addr 192.168.33.10 --lease-duration 3600
+```
+
 cross compile:
 
 ```bash
