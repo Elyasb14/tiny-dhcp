@@ -2,21 +2,21 @@ const std = @import("std");
 
 pub const DHCPPacketType = enum(u8) {
     OFFER = 2,
-    ACK = 1,
+    ACK = 5,
 };
 
 pub const DHCPPacket = struct {
     bootp_header: *BootpHeader,
     dhcp_type: DHCPPacketType,
-    lease_duration: i32,
+    lease_duration: u32,
 
-    pub fn init(bootp_header: *BootpHeader, lease_duration: i32, dhcp_type: DHCPPacketType) DHCPPacket {
+    pub fn init(bootp_header: *BootpHeader, lease_duration: u32, dhcp_type: DHCPPacketType) DHCPPacket {
         return .{ .bootp_header = bootp_header, .lease_duration = lease_duration, .dhcp_type = dhcp_type };
     }
 
     pub fn write_to_buf(self: *DHCPPacket, out: []u8) !void {
-        const ld_as_bytes = std.mem.asBytes(&self.lease_duration);
-        if (out.len < 236) return error.BufferTooSmall;
+        const ld_as_bytes = std.mem.asBytes(&@byteSwap(self.lease_duration));
+        if (out.len < 268) return error.BufferTooSmall;
 
         out[0] = self.bootp_header.op;
         out[1] = self.bootp_header.htype;
