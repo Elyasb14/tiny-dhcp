@@ -1,11 +1,17 @@
 const std = @import("std");
 
+pub const DHCPPacketType = enum(u8) {
+    OFFER = 2,
+    ACK = 1,
+};
+
 pub const DHCPPacket = struct {
     bootp_header: *BootpHeader,
+    dhcp_type: DHCPPacketType,
     lease_duration: i32,
 
-    pub fn init(bootp_header: *BootpHeader, lease_duration: i32) DHCPPacket {
-        return .{ .bootp_header = bootp_header, .lease_duration = lease_duration };
+    pub fn init(bootp_header: *BootpHeader, lease_duration: i32, dhcp_type: DHCPPacketType) DHCPPacket {
+        return .{ .bootp_header = bootp_header, .lease_duration = lease_duration, .dhcp_type = dhcp_type };
     }
 
     pub fn write_to_buf(self: *DHCPPacket, out: []u8) !void {
@@ -31,7 +37,7 @@ pub const DHCPPacket = struct {
 
         out[240] = 53;
         out[241] = 1;
-        out[242] = 2;
+        out[242] = @intFromEnum(self.dhcp_type);
         out[243] = 54;
         out[244] = 4;
         out[245] = 192;
@@ -151,7 +157,7 @@ pub fn main(init: std.process.Init) !void {
                     bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
                     bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header, 50);
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, 50, .OFFER);
                     try dhcp_packet.write_to_buf(&offer_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..268]);
@@ -167,7 +173,7 @@ pub fn main(init: std.process.Init) !void {
                     bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
                     bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header, 50);
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, 50, .ACK);
                     try dhcp_packet.write_to_buf(&ack_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..268]);
