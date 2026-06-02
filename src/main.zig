@@ -91,21 +91,22 @@ pub fn main(init: std.process.Init) !void {
                 i += 1;
                 continue;
             }
-            if (op == 255) break;
 
+            if (op == 255) break;
             if (i + 1 >= msg.data.len) break;
+
             const len = msg.data[i + 1];
             const value_end = i + 2 + len;
             if (value_end > msg.data.len) break;
 
             const data = msg.data[i + 2 .. value_end];
             if (op == 53) {
-                // build OFFER packet
                 if (data.len >= 1 and data[0] == 1) {
+                    // build OFFER packet
                     var offer_buf: [300]u8 = undefined;
                     @memset(&offer_buf, 0);
 
-                    // we modify the original header with new values, some stay the same?
+                    // we modify the original header with new values, some stay the same
                     bootp_header.op = BOOTP_OP_REPLY;
                     bootp_header.yiaddr = &[_]u8{ 192, 168, 33, 7 };
                     bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
@@ -148,7 +149,6 @@ pub fn main(init: std.process.Init) !void {
                     std.debug.print("OFFER SENT\n", .{});
                 } else if (data.len >= 1 and data[0] == 3) {
                     // build ACK packet
-
                     var ack_buf: [300]u8 = undefined;
                     @memset(&ack_buf, 0);
 
