@@ -125,6 +125,8 @@ pub fn main(init: std.process.Init) !void {
 
         const broadcast_addr = try std.Io.net.IpAddress.parse("255.255.255.255", 68);
 
+        std.debug.assert(msg.data.len >= 240);
+
         if (!std.mem.eql(u8, msg.data[236..240], &DHCP_MAGIC_COOKIE)) {
             std.debug.print("not a dhcp packet...", .{});
             continue;
