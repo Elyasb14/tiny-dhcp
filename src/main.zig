@@ -15,7 +15,8 @@ pub const DHCPPacket = struct {
     }
 
     pub fn write_to_buf(self: *DHCPPacket, out: []u8) !void {
-        const ld_as_bytes = std.mem.asBytes(&@byteSwap(self.lease_duration));
+        var ld_as_bytes: [4]u8 = undefined;
+        std.mem.writeInt(u32, &ld_as_bytes, self.lease_duration, .big);
         if (out.len < 268) return error.BufferTooSmall;
 
         out[0] = self.bootp_header.op;
@@ -117,18 +118,18 @@ pub fn main(init: std.process.Init) !void {
     var server = try addr.bind(io, .{ .protocol = .udp, .mode = .dgram, .allow_broadcast = true });
     var recv_buffer: [1024]u8 = undefined;
 
-    std.debug.print("tiny-dhcp server listening...\n", .{});
+    const broadcast_addr = try std.Io.net.IpAddress.parse("255.255.255.255", 68);
+
+    std.log.info("tiny-dhcp server listening...", .{});
 
     while (true) {
         const msg = try server.receive(io, &recv_buffer);
+        if (msg.data.len < 240) continue;
+
         var bootp_header = BootpHeader.init(msg.data);
 
-        const broadcast_addr = try std.Io.net.IpAddress.parse("255.255.255.255", 68);
-
-        std.debug.assert(msg.data.len >= 240);
-
         if (!std.mem.eql(u8, msg.data[236..240], &DHCP_MAGIC_COOKIE)) {
-            std.debug.print("not a dhcp packet...", .{});
+            std.log.debug("not a dhcp packet...", .{});
             continue;
         }
 
