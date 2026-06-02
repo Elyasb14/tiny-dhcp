@@ -1,7 +1,5 @@
 const std = @import("std");
 
-pub const DHCP_MAGIC_COOKIE = [4]u8{ 0x63, 0x82, 0x53, 0x63 };
-
 pub const BootpHeader = struct {
     // 0..3
     op: u8,
@@ -64,6 +62,7 @@ pub const BootpHeader = struct {
 
 const BOOTP_OP_REPLY: u8 = 2;
 const DHCP_OPTIONS_OFFSET: usize = 240;
+const DHCP_MAGIC_COOKIE = [4]u8{ 0x63, 0x82, 0x53, 0x63 };
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
@@ -76,16 +75,15 @@ pub fn main(init: std.process.Init) !void {
 
     while (true) {
         const msg = try server.receive(io, &recv_buffer);
-
-        const idx = std.mem.find(u8, msg.data, &DHCP_MAGIC_COOKIE) orelse 0;
-        std.debug.assert(idx == 236);
-        std.debug.assert(msg.data[240] == 53);
-
         var bootp_header = BootpHeader.init(msg.data);
 
         const broadcast_addr = try std.Io.net.IpAddress.parse("255.255.255.255", 68);
 
-        // TODO: make this magic number 240 (the dhcp options offset) have a good name
+        if (!std.mem.eql(u8, msg.data[236..240], &DHCP_MAGIC_COOKIE)) {
+            std.debug.print("not a dhcp packet...", .{});
+            continue;
+        }
+
         var i: usize = DHCP_OPTIONS_OFFSET;
         while (i < msg.data.len) {
             const op = msg.data[i];
