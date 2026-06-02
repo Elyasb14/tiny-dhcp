@@ -1,5 +1,45 @@
 const std = @import("std");
 
+pub const DHCPPacket = struct {
+    bootp_header: *BootpHeader,
+    data: []u8,
+
+    pub fn init(bootp_header: *BootpHeader, data: []u8) DHCPPacket {
+        return .{ .bootp_header = bootp_header, .data = data };
+    }
+
+    pub fn write_options(self: *DHCPPacket) void {
+        self.data[240] = 53;
+        self.data[241] = 1;
+        self.data[242] = 2;
+        self.data[243] = 54;
+        self.data[244] = 4;
+        self.data[245] = 192;
+        self.data[246] = 168;
+        self.data[247] = 33;
+        self.data[248] = 4;
+        self.data[249] = 1;
+        self.data[250] = 4;
+        self.data[251] = 255;
+        self.data[252] = 255;
+        self.data[253] = 255;
+        self.data[254] = 0;
+        self.data[255] = 51;
+        self.data[256] = 4;
+        self.data[257] = 0;
+        self.data[258] = 0;
+        self.data[259] = 0x0E;
+        self.data[260] = 0x10;
+        self.data[261] = 3;
+        self.data[262] = 4;
+        self.data[263] = 192;
+        self.data[264] = 168;
+        self.data[265] = 33;
+        self.data[266] = 1;
+        self.data[267] = 255;
+    }
+};
+
 pub const BootpHeader = struct {
     // 0..3
     op: u8,
@@ -39,7 +79,7 @@ pub const BootpHeader = struct {
         };
     }
 
-    pub fn write(self: BootpHeader, out: []u8) !void {
+    pub fn write_bootp_header(self: BootpHeader, out: []u8) !void {
         if (out.len < 236) return error.BufferTooSmall;
 
         out[0] = self.op;
@@ -106,43 +146,16 @@ pub fn main(init: std.process.Init) !void {
                     var offer_buf: [300]u8 = undefined;
                     @memset(&offer_buf, 0);
 
-                    // we modify the original header with new values, some stay the same
                     bootp_header.op = BOOTP_OP_REPLY;
                     bootp_header.yiaddr = &[_]u8{ 192, 168, 33, 7 };
                     bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
                     bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
-                    try bootp_header.write(offer_buf[0..236]);
+                    try bootp_header.write_bootp_header(offer_buf[0..236]);
                     @memcpy(offer_buf[236..240], &DHCP_MAGIC_COOKIE);
 
-                    offer_buf[240] = 53;
-                    offer_buf[241] = 1;
-                    offer_buf[242] = 2;
-                    offer_buf[243] = 54;
-                    offer_buf[244] = 4;
-                    offer_buf[245] = 192;
-                    offer_buf[246] = 168;
-                    offer_buf[247] = 33;
-                    offer_buf[248] = 4;
-                    offer_buf[249] = 1;
-                    offer_buf[250] = 4;
-                    offer_buf[251] = 255;
-                    offer_buf[252] = 255;
-                    offer_buf[253] = 255;
-                    offer_buf[254] = 0;
-                    offer_buf[255] = 51;
-                    offer_buf[256] = 4;
-                    offer_buf[257] = 0;
-                    offer_buf[258] = 0;
-                    offer_buf[259] = 0x0E;
-                    offer_buf[260] = 0x10;
-                    offer_buf[261] = 3;
-                    offer_buf[262] = 4;
-                    offer_buf[263] = 192;
-                    offer_buf[264] = 168;
-                    offer_buf[265] = 33;
-                    offer_buf[266] = 1;
-                    offer_buf[267] = 255;
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, &offer_buf);
+                    dhcp_packet.write_options();
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..268]);
 
@@ -157,37 +170,11 @@ pub fn main(init: std.process.Init) !void {
                     bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
                     bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
-                    try bootp_header.write(ack_buf[0..236]);
+                    try bootp_header.write_bootp_header(ack_buf[0..236]);
                     @memcpy(ack_buf[236..240], &DHCP_MAGIC_COOKIE);
 
-                    ack_buf[240] = 53;
-                    ack_buf[241] = 1;
-                    ack_buf[242] = 5;
-                    ack_buf[243] = 54;
-                    ack_buf[244] = 4;
-                    ack_buf[245] = 192;
-                    ack_buf[246] = 168;
-                    ack_buf[247] = 33;
-                    ack_buf[248] = 4;
-                    ack_buf[249] = 1;
-                    ack_buf[250] = 4;
-                    ack_buf[251] = 255;
-                    ack_buf[252] = 255;
-                    ack_buf[253] = 255;
-                    ack_buf[254] = 0;
-                    ack_buf[255] = 51;
-                    ack_buf[256] = 4;
-                    ack_buf[257] = 0;
-                    ack_buf[258] = 0;
-                    ack_buf[259] = 0x0E;
-                    ack_buf[260] = 0x10;
-                    ack_buf[261] = 3;
-                    ack_buf[262] = 4;
-                    ack_buf[263] = 192;
-                    ack_buf[264] = 168;
-                    ack_buf[265] = 33;
-                    ack_buf[266] = 1;
-                    ack_buf[267] = 255;
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, &ack_buf);
+                    dhcp_packet.write_options();
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..268]);
 
