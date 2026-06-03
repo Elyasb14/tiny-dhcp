@@ -23,9 +23,10 @@ pub const DHCPPacket = struct {
     dhcp_type: DHCPPacketType,
     lease_duration: u32,
     cidr: u8,
+    gw: [4]u8,
 
-    pub fn init(bootp_header: *BootpHeader, lease_duration: u32, dhcp_type: DHCPPacketType, cidr: u8) DHCPPacket {
-        return .{ .bootp_header = bootp_header, .lease_duration = lease_duration, .dhcp_type = dhcp_type, .cidr = cidr };
+    pub fn init(bootp_header: *BootpHeader, lease_duration: u32, dhcp_type: DHCPPacketType, cidr: u8, gw: [4]u8) DHCPPacket {
+        return .{ .bootp_header = bootp_header, .lease_duration = lease_duration, .dhcp_type = dhcp_type, .cidr = cidr, .gw = gw };
     }
 
     pub fn write_to_buf(self: *DHCPPacket, out: []u8) !void {
@@ -33,6 +34,9 @@ pub const DHCPPacket = struct {
 
         var ld_as_bytes: [4]u8 = undefined;
         std.mem.writeInt(u32, &ld_as_bytes, self.lease_duration, .big);
+
+        const subnet_mask = try cidr_to_subnet_mask(self.cidr);
+
         if (out.len < 268) return error.BufferTooSmall;
 
         out[0] = self.bootp_header.op;
@@ -66,14 +70,12 @@ pub const DHCPPacket = struct {
         out[248] = 4;
 
         // set subnet mask
-        //
-        const sm = try cidr_to_subnet_mask(self.cidr);
         out[249] = 1;
         out[250] = 4;
-        out[251] = sm[0];
-        out[252] = sm[1];
-        out[253] = sm[2];
-        out[254] = sm[3];
+        out[251] = subnet_mask[0];
+        out[252] = subnet_mask[1];
+        out[253] = subnet_mask[2];
+        out[254] = subnet_mask[3];
 
         // lease duration (i32)
         out[255] = 51;
@@ -86,10 +88,12 @@ pub const DHCPPacket = struct {
         // router addr
         out[261] = 3;
         out[262] = 4;
-        out[263] = 192;
-        out[264] = 168;
-        out[265] = 33;
-        out[266] = 1;
+        out[263] = self.gw[0];
+        out[264] = self.gw[1];
+        out[265] = self.gw[2];
+        out[266] = self.gw[3];
+
+        // end options
         out[267] = 255;
     }
 };
@@ -187,7 +191,7 @@ pub fn main(init: std.process.Init) !void {
                     // build OFFER packet
                     var offer_buf: [300]u8 = undefined;
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER, args.cidr);
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER, args.cidr, args.lease_gw);
                     try dhcp_packet.write_to_buf(&offer_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..268]);
@@ -197,7 +201,7 @@ pub fn main(init: std.process.Init) !void {
                     // build ACK packet
                     var ack_buf: [300]u8 = undefined;
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK, args.cidr);
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK, args.cidr, args.lease_gw);
                     try dhcp_packet.write_to_buf(&ack_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..268]);

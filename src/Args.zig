@@ -5,6 +5,7 @@ const Args = @This();
 lease_addr: [4]u8 = .{ 192, 168, 33, 7 },
 lease_duration: u32 = 50,
 cidr: u8 = 24,
+lease_gw: [4]u8 = .{ 192, 168, 33, 1 },
 
 pub fn parse(init: std.process.Init) !Args {
     var result: Args = .{};
@@ -44,6 +45,12 @@ pub fn parse(init: std.process.Init) !Args {
                 std.log.err("invalid --cidr: {s}", .{raw});
                 help(process_name);
             };
+        } else if (std.mem.eql(u8, arg, "--lease-gw")) {
+            const raw = it.next() orelse {
+                std.log.err("--lease-gw requires an IPv4 address", .{});
+                help(process_name);
+            };
+            result.lease_gw = try parse_ipv4(raw);
         } else {
             std.log.err("unknown option: {s}", .{arg});
             help(process_name);
@@ -75,10 +82,11 @@ fn help(process_name: []const u8) noreturn {
         \\  --lease-addr <ipv4>      IP to offer/ack (default: 192.168.33.7)
         \\  --lease-duration <secs>  Lease time in seconds (default: 50)
         \\  --cidr                   Cidr for subnet mask (default: 24)
+        \\  --lease-gw               IP of gateway for offer/ack (default: 192.168.33.1)
         \\  -h, --help               Show this help message
         \\
         \\EXAMPLE:
-        \\  {s} --lease-addr 192.168.33.10 --lease-duration 3600 --cidr 25
+        \\  {s} --lease-addr 192.168.33.10 --lease-gw 192.168.33.1 --lease-duration 3600 --cidr 25
         \\
     , .{ process_name, process_name });
     std.process.exit(0);
