@@ -1,7 +1,7 @@
 const std = @import("std");
 const Args = @import("Args.zig");
 
-fn cidr_to_sm(cidr: u8) ![4]u8 {
+fn cidr_to_subnet_mask(cidr: u8) ![4]u8 {
     if (cidr > 32) return error.InvalidCidr;
     const mask_u32: u32 = if (cidr == 0) 0 else (@as(u32, 0xFFFFFFFF) << @intCast(32 - cidr));
 
@@ -67,7 +67,7 @@ pub const DHCPPacket = struct {
 
         // set subnet mask
         //
-        const sm = try cidr_to_sm(self.cidr);
+        const sm = try cidr_to_subnet_mask(self.cidr);
         out[249] = 1;
         out[250] = 4;
         out[251] = sm[0];
