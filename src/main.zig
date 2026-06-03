@@ -1,6 +1,18 @@
 const std = @import("std");
 const Args = @import("Args.zig");
 
+fn cidr_to_sm(cidr: u8) ![4]u8 {
+    if (cidr > 32) return error.InvalidCidr;
+    const mask_u32: u32 = if (cidr == 0) 0 else (@as(u32, 0xFFFFFFFF) << @intCast(32 - cidr));
+
+    return .{
+        @intCast((mask_u32 >> 24) & 0xFF),
+        @intCast((mask_u32 >> 16) & 0xFF),
+        @intCast((mask_u32 >> 8) & 0xFF),
+        @intCast(mask_u32 & 0xFF),
+    };
+}
+
 pub const DHCPPacketType = enum(u8) {
     OFFER = 2,
     ACK = 5,
@@ -10,13 +22,14 @@ pub const DHCPPacket = struct {
     bootp_header: *BootpHeader,
     dhcp_type: DHCPPacketType,
     lease_duration: u32,
+    cidr: u8,
 
-    pub fn init(bootp_header: *BootpHeader, lease_duration: u32, dhcp_type: DHCPPacketType) DHCPPacket {
-        return .{ .bootp_header = bootp_header, .lease_duration = lease_duration, .dhcp_type = dhcp_type };
+    pub fn init(bootp_header: *BootpHeader, lease_duration: u32, dhcp_type: DHCPPacketType, cidr: u8) DHCPPacket {
+        return .{ .bootp_header = bootp_header, .lease_duration = lease_duration, .dhcp_type = dhcp_type, .cidr = cidr };
     }
 
     pub fn write_to_buf(self: *DHCPPacket, out: []u8) !void {
-        @memset(&out, 0);
+        @memset(out, 0);
 
         var ld_as_bytes: [4]u8 = undefined;
         std.mem.writeInt(u32, &ld_as_bytes, self.lease_duration, .big);
@@ -39,27 +52,38 @@ pub const DHCPPacket = struct {
         @memcpy(out[108..236], self.bootp_header.file);
         @memcpy(out[236..240], &DHCP_MAGIC_COOKIE);
 
+        // dhcp message type
         out[240] = 53;
         out[241] = 1;
         out[242] = @intFromEnum(self.dhcp_type);
+
+        // server ip
         out[243] = 54;
         out[244] = 4;
         out[245] = 192;
         out[246] = 168;
         out[247] = 33;
         out[248] = 4;
+
+        // set subnet mask
+        //
+        const sm = try cidr_to_sm(self.cidr);
         out[249] = 1;
         out[250] = 4;
-        out[251] = 255;
-        out[252] = 255;
-        out[253] = 255;
-        out[254] = 0;
+        out[251] = sm[0];
+        out[252] = sm[1];
+        out[253] = sm[2];
+        out[254] = sm[3];
+
+        // lease duration (i32)
         out[255] = 51;
         out[256] = 4;
         out[257] = ld_as_bytes[0];
         out[258] = ld_as_bytes[1];
         out[259] = ld_as_bytes[2];
         out[260] = ld_as_bytes[3];
+
+        // router addr
         out[261] = 3;
         out[262] = 4;
         out[263] = 192;
@@ -157,13 +181,13 @@ pub fn main(init: std.process.Init) !void {
                 bootp_header.op = BOOTP_OP_REPLY;
                 bootp_header.yiaddr = args.lease_addr[0..];
                 bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
-                // it was this, if stuff doesnt work we may need to redo this bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
-                bootp_header.ciaddr = &msg.from.ip4.bytes;
+                bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
+
                 if (data.len >= 1 and data[0] == 1) {
                     // build OFFER packet
                     var offer_buf: [300]u8 = undefined;
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER);
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER, args.cidr);
                     try dhcp_packet.write_to_buf(&offer_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..268]);
@@ -173,7 +197,7 @@ pub fn main(init: std.process.Init) !void {
                     // build ACK packet
                     var ack_buf: [300]u8 = undefined;
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK);
+                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK, args.cidr);
                     try dhcp_packet.write_to_buf(&ack_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..268]);

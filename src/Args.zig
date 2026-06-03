@@ -4,6 +4,7 @@ const Args = @This();
 
 lease_addr: [4]u8 = .{ 192, 168, 33, 7 },
 lease_duration: u32 = 50,
+cidr: u8 = 24,
 
 pub fn parse(init: std.process.Init) !Args {
     var result: Args = .{};
@@ -31,6 +32,16 @@ pub fn parse(init: std.process.Init) !Args {
             };
             result.lease_duration = std.fmt.parseInt(u32, raw, 10) catch {
                 std.log.err("invalid --lease-duration: {s}", .{raw});
+                help(process_name);
+            };
+        } else if (std.mem.eql(u8, arg, "--cidr")) {
+            const raw = it.next() orelse {
+                std.log.err("--cidr requires an argument (0-32)", .{});
+                help(process_name);
+            };
+
+            result.cidr = std.fmt.parseInt(u8, raw, 10) catch {
+                std.log.err("invalid --cidr: {s}", .{raw});
                 help(process_name);
             };
         } else {
@@ -63,10 +74,11 @@ fn help(process_name: []const u8) noreturn {
         \\OPTIONS:
         \\  --lease-addr <ipv4>      IP to offer/ack (default: 192.168.33.7)
         \\  --lease-duration <secs>  Lease time in seconds (default: 50)
+        \\  --cidr                   Cidr for subnet mask (default: 24)
         \\  -h, --help               Show this help message
         \\
         \\EXAMPLE:
-        \\  {s} --lease-addr 192.168.33.10 --lease-duration 3600
+        \\  {s} --lease-addr 192.168.33.10 --lease-duration 3600 --cidr 25
         \\
     , .{ process_name, process_name });
     std.process.exit(0);
