@@ -16,6 +16,8 @@ pub const DHCPPacket = struct {
     }
 
     pub fn write_to_buf(self: *DHCPPacket, out: []u8) !void {
+        @memset(&out, 0);
+
         var ld_as_bytes: [4]u8 = undefined;
         std.mem.writeInt(u32, &ld_as_bytes, self.lease_duration, .big);
         if (out.len < 268) return error.BufferTooSmall;
@@ -152,15 +154,14 @@ pub fn main(init: std.process.Init) !void {
 
             const data = msg.data[i + 2 .. value_end];
             if (op == 53) {
+                bootp_header.op = BOOTP_OP_REPLY;
+                bootp_header.yiaddr = args.lease_addr[0..];
+                bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
+                // it was this, if stuff doesnt work we may need to redo this bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
+                bootp_header.ciaddr = &msg.from.ip4.bytes;
                 if (data.len >= 1 and data[0] == 1) {
                     // build OFFER packet
                     var offer_buf: [300]u8 = undefined;
-                    @memset(&offer_buf, 0);
-
-                    bootp_header.op = BOOTP_OP_REPLY;
-                    bootp_header.yiaddr = args.lease_addr[0..];
-                    bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
-                    bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
                     var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER);
                     try dhcp_packet.write_to_buf(&offer_buf);
@@ -171,12 +172,6 @@ pub fn main(init: std.process.Init) !void {
                 } else if (data.len >= 1 and data[0] == 3) {
                     // build ACK packet
                     var ack_buf: [300]u8 = undefined;
-                    @memset(&ack_buf, 0);
-
-                    bootp_header.op = BOOTP_OP_REPLY;
-                    bootp_header.yiaddr = args.lease_addr[0..];
-                    bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
-                    bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
                     var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK);
                     try dhcp_packet.write_to_buf(&ack_buf);
