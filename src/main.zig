@@ -14,7 +14,9 @@ fn cidr_to_subnet_mask(cidr: u8) ![4]u8 {
 }
 
 pub const DHCPPacketType = enum(u8) {
+    DISCOVER = 1,
     OFFER = 2,
+    REQUEST = 3,
     ACK = 5,
 };
 
@@ -187,28 +189,36 @@ pub fn main(init: std.process.Init) !void {
                 bootp_header.siaddr = &[_]u8{ 192, 168, 33, 4 };
                 bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
-                if (data.len >= 1 and data[0] == 1) {
-                    // build OFFER packet
-                    var offer_buf: [300]u8 = undefined;
+                if (data.len >= 1) {
+                    const dhcp_packet_type: DHCPPacketType = @enumFromInt(data[0]);
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER, args.cidr, args.lease_gw);
-                    try dhcp_packet.write_to_buf(&offer_buf);
+                    switch (dhcp_packet_type) {
+                        .DISCOVER => {
+                            // if we get a discover packet we build an OFFER packet
+                            var offer_buf: [300]u8 = undefined;
 
-                    try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..268]);
+                            var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER, args.cidr, args.lease_gw);
+                            try dhcp_packet.write_to_buf(&offer_buf);
 
-                    std.log.info("OFFER SENT", .{});
-                } else if (data.len >= 1 and data[0] == 3) {
-                    // build ACK packet
-                    var ack_buf: [300]u8 = undefined;
+                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..268]);
 
-                    var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK, args.cidr, args.lease_gw);
-                    try dhcp_packet.write_to_buf(&ack_buf);
+                            std.log.info("OFFER SENT", .{});
+                        },
+                        .REQUEST => {
+                            // if we get a request packet we build an ACK packet
+                            var ack_buf: [300]u8 = undefined;
 
-                    try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..268]);
+                            var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK, args.cidr, args.lease_gw);
+                            try dhcp_packet.write_to_buf(&ack_buf);
 
-                    std.log.info("ACK SENT", .{});
-                } else {
-                    std.log.err("NOT SUPPORTED", .{});
+                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..268]);
+
+                            std.log.info("ACK SENT", .{});
+                        },
+                        else => {
+                            std.log.warn("dhcp packet type not supported: {d}", .{dhcp_packet_type});
+                        },
+                    }
                 }
             }
 
