@@ -190,7 +190,9 @@ pub fn main(init: std.process.Init) !void {
                 bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
                 if (data.len >= 1) {
-                    const dhcp_packet_type: DHCPPacketType = @enumFromInt(data[0]);
+                    // const dhcp_packet_type: DHCPPacketType = @enumFromInt(data[0]);
+                    // TODO: does contonuing actually hit here? is this sketch?
+                    const dhcp_packet_type = std.enums.fromInt(DHCPPacketType, data[0]) orelse continue;
 
                     switch (dhcp_packet_type) {
                         .DISCOVER => {
