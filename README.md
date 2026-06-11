@@ -11,7 +11,7 @@ zig build && ./zig-out/bin/tiny-dhcp
 optional flags:
 
 ```bash
-./zig-out/bin/tiny-dhcp --lease-addr 192.168.33.10 --lease-duration 3600 --cidr 24
+./zig-out/bin/tiny-dhcp --lease-addr 192.168.33.10 --lease-duration 3600 --lease-cidr 24
 ```
 
 cross compile:
