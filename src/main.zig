@@ -199,7 +199,7 @@ pub fn main(init: std.process.Init) !void {
                             // if we get a discover packet we build an OFFER packet
                             var offer_buf: [300]u8 = undefined;
 
-                            var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER, args.cidr, args.lease_gw);
+                            var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER, args.lease_cidr, args.lease_gw);
                             try dhcp_packet.write_to_buf(&offer_buf);
 
                             try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..268]);
@@ -210,7 +210,7 @@ pub fn main(init: std.process.Init) !void {
                             // if we get a request packet we build an ACK packet
                             var ack_buf: [300]u8 = undefined;
 
-                            var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK, args.cidr, args.lease_gw);
+                            var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK, args.lease_cidr, args.lease_gw);
                             try dhcp_packet.write_to_buf(&ack_buf);
 
                             try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..268]);

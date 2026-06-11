@@ -4,7 +4,7 @@ const Args = @This();
 
 lease_addr: [4]u8 = .{ 192, 168, 33, 7 },
 lease_duration: u32 = 50,
-cidr: u8 = 24,
+lease_cidr: u8 = 24,
 lease_gw: [4]u8 = .{ 192, 168, 33, 1 },
 
 pub fn parse(init: std.process.Init) !Args {
@@ -35,14 +35,14 @@ pub fn parse(init: std.process.Init) !Args {
                 std.log.err("invalid --lease-duration: {s}", .{raw});
                 help(process_name);
             };
-        } else if (std.mem.eql(u8, arg, "--cidr")) {
+        } else if (std.mem.eql(u8, arg, "--lease-cidr")) {
             const raw = it.next() orelse {
-                std.log.err("--cidr requires an argument (0-32)", .{});
+                std.log.err("--lease-cidr requires an argument (0-32)", .{});
                 help(process_name);
             };
 
-            result.cidr = std.fmt.parseInt(u8, raw, 10) catch {
-                std.log.err("invalid --cidr: {s}", .{raw});
+            result.lease_cidr = std.fmt.parseInt(u8, raw, 10) catch {
+                std.log.err("invalid --lease-cidr: {s}", .{raw});
                 help(process_name);
             };
         } else if (std.mem.eql(u8, arg, "--lease-gw")) {
@@ -81,12 +81,12 @@ fn help(process_name: []const u8) noreturn {
         \\OPTIONS:
         \\  --lease-addr <ipv4>      IP to offer/ack (default: 192.168.33.7)
         \\  --lease-duration <secs>  Lease time in seconds (default: 50)
-        \\  --cidr                   Cidr for subnet mask (default: 24)
+        \\  --lease-cidr                   Cidr for subnet mask (default: 24)
         \\  --lease-gw               IP of gateway for offer/ack (default: 192.168.33.1)
         \\  -h, --help               Show this help message
         \\
         \\EXAMPLE:
-        \\  {s} --lease-addr 192.168.33.10 --lease-gw 192.168.33.1 --lease-duration 3600 --cidr 25
+        \\  {s} --lease-addr 192.168.33.10 --lease-gw 192.168.33.1 --lease-duration 3600 --lease-cidr 25
         \\
     , .{ process_name, process_name });
     std.process.exit(0);
