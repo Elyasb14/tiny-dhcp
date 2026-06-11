@@ -67,10 +67,10 @@ pub const DHCPPacket = struct {
         // server ip
         out[243] = 54;
         out[244] = 4;
-        out[245] = 192;
-        out[246] = 168;
-        out[247] = 33;
-        out[248] = 4;
+        out[245] = self.server_id[0];
+        out[246] = self.server_id[1];
+        out[247] = self.server_id[2];
+        out[248] = self.server_id[3];
 
         // set subnet mask
         out[249] = 1;
@@ -96,16 +96,8 @@ pub const DHCPPacket = struct {
         out[265] = self.gw[2];
         out[266] = self.gw[3];
 
-        // dhcp server id
-        out[267] = 54;
-        out[268] = 4;
-        out[269] = self.server_id[0];
-        out[270] = self.server_id[1];
-        out[271] = self.server_id[2];
-        out[272] = self.server_id[3];
-
         // end options
-        out[273] = 255;
+        out[267] = 255;
     }
 };
 
@@ -162,7 +154,7 @@ pub fn main(init: std.process.Init) !void {
     var server = try addr.bind(io, .{ .protocol = .udp, .mode = .dgram, .allow_broadcast = true });
     var recv_buffer: [1024]u8 = undefined;
 
-    const broadcast_addr = try std.Io.net.IpAddress.parse("255.255.255.255", 68);
+    const broadcast_addr = try std.Io.net.IpAddress.parse("192.168.33.255", 68);
 
     std.log.info("tiny-dhcp server listening...", .{});
 
@@ -210,7 +202,7 @@ pub fn main(init: std.process.Init) !void {
                             var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER, args.lease_cidr, args.lease_gw, args.server_addr);
                             try dhcp_packet.write_to_buf(&offer_buf);
 
-                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..274]);
+                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..268]);
 
                             std.log.info("OFFER SENT", .{});
                         },
@@ -221,7 +213,7 @@ pub fn main(init: std.process.Init) !void {
                             var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK, args.lease_cidr, args.lease_gw, args.server_addr);
                             try dhcp_packet.write_to_buf(&ack_buf);
 
-                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..274]);
+                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..268]);
 
                             std.log.info("ACK SENT", .{});
                         },
