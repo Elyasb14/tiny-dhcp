@@ -22,23 +22,19 @@ pub const DHCPPacketType = enum(u8) {
 
 pub const DHCPPacket = struct {
     bootp_header: *BootpHeader,
-    dhcp_type: DHCPPacketType,
-    lease_duration: u32,
-    cidr: u8,
-    gw: [4]u8,
-    server_id: [4]u8,
+    dhcp_options: *DHCPOptions,
 
-    pub fn init(bootp_header: *BootpHeader, lease_duration: u32, dhcp_type: DHCPPacketType, cidr: u8, gw: [4]u8, server_id: [4]u8) DHCPPacket {
-        return .{ .bootp_header = bootp_header, .lease_duration = lease_duration, .dhcp_type = dhcp_type, .cidr = cidr, .gw = gw, .server_id = server_id };
+    pub fn init(bootp_header: *BootpHeader, dhcp_options: *DHCPOptions) DHCPPacket {
+        return .{ .bootp_header = bootp_header, .dhcp_options = dhcp_options };
     }
 
     pub fn write_to_buf(self: *DHCPPacket, out: []u8) !void {
         @memset(out, 0);
 
         var ld_as_bytes: [4]u8 = undefined;
-        std.mem.writeInt(u32, &ld_as_bytes, self.lease_duration, .big);
+        std.mem.writeInt(u32, &ld_as_bytes, self.dhcp_options.lease_duration.?, .big);
 
-        const subnet_mask = try cidr_to_subnet_mask(self.cidr);
+        const subnet_mask = try cidr_to_subnet_mask(self.dhcp_options.lease_cidr.?);
 
         if (out.len < 268) return error.BufferTooSmall;
 
@@ -59,18 +55,26 @@ pub const DHCPPacket = struct {
         @memcpy(out[108..236], self.bootp_header.file);
         @memcpy(out[236..240], &DHCP_MAGIC_COOKIE);
 
+        var slice_len: usize = 0;
+
         // dhcp message type
-        out[240] = 53;
-        out[241] = 1;
-        out[242] = @intFromEnum(self.dhcp_type);
+        if (self.dhcp_options.dhcp_packet_type) |dhcp_type| {
+            out[240] = 53;
+            out[241] = 1;
+            out[242] = @intFromEnum(dhcp_type);
+            slice_len += 3;
+        }
 
         // server ip
-        out[243] = 54;
-        out[244] = 4;
-        out[245] = self.server_id[0];
-        out[246] = self.server_id[1];
-        out[247] = self.server_id[2];
-        out[248] = self.server_id[3];
+        if (self.dhcp_options.server_addr) |addr| {
+            out[243] = 54;
+            out[244] = 4;
+            out[245] = addr[0];
+            out[246] = addr[1];
+            out[247] = addr[2];
+            out[248] = addr[3];
+            slice_len += 6;
+        }
 
         // set subnet mask
         out[249] = 1;
@@ -79,6 +83,7 @@ pub const DHCPPacket = struct {
         out[252] = subnet_mask[1];
         out[253] = subnet_mask[2];
         out[254] = subnet_mask[3];
+        slice_len += 6;
 
         // lease duration (i32)
         out[255] = 51;
@@ -87,18 +92,29 @@ pub const DHCPPacket = struct {
         out[258] = ld_as_bytes[1];
         out[259] = ld_as_bytes[2];
         out[260] = ld_as_bytes[3];
+        slice_len += 6;
 
-        // router addr
-        out[261] = 3;
-        out[262] = 4;
-        out[263] = self.gw[0];
-        out[264] = self.gw[1];
-        out[265] = self.gw[2];
-        out[266] = self.gw[3];
+        if (self.dhcp_options.lease_gw) |gw| {
+            // router addr
+            out[261] = 3;
+            out[262] = 4;
+            out[263] = gw[0];
+            out[264] = gw[1];
+            out[265] = gw[2];
+            out[266] = gw[3];
+            slice_len += 6;
+        }
 
         // end options
-        out[267] = 255;
+        out[slice_len] = 255;
     }
+};
+pub const DHCPOptions = struct {
+    lease_duration: ?u32 = null,
+    dhcp_packet_type: ?DHCPPacketType = null,
+    lease_cidr: ?u8 = null,
+    lease_gw: ?[4]u8 = null,
+    server_addr: ?[4]u8 = null,
 };
 
 pub const BootpHeader = struct {
@@ -145,6 +161,26 @@ const BOOTP_OP_REPLY: u8 = 2;
 const DHCP_OPTIONS_OFFSET: usize = 240;
 const DHCP_MAGIC_COOKIE = [4]u8{ 0x63, 0x82, 0x53, 0x63 };
 
+fn compute_broadcast_from_cidr_and_ip(cidr: u8, ip: [4]u8) ![4]u8 {
+    var sm = try cidr_to_subnet_mask(cidr);
+    std.debug.print("SUBNET MASK: {any}\n", .{sm});
+
+    for (sm, 0..) |x, i| {
+        sm[i] = 255 - x;
+    }
+
+    std.debug.print("SUBNET MASK AFTER: {any}\n", .{sm});
+
+    var broadcast_addr: [4]u8 = undefined;
+    for (ip, 0..) |x, i| {
+        broadcast_addr[i] = x | sm[i];
+    }
+
+    std.debug.print("BROADCAST: {any}\n", .{broadcast_addr});
+
+    return broadcast_addr;
+}
+
 pub fn main(init: std.process.Init) !void {
     const args = try Args.parse(init);
     const io = init.io;
@@ -154,7 +190,8 @@ pub fn main(init: std.process.Init) !void {
     var server = try addr.bind(io, .{ .protocol = .udp, .mode = .dgram, .allow_broadcast = true });
     var recv_buffer: [1024]u8 = undefined;
 
-    const broadcast_addr = try std.Io.net.IpAddress.parse("192.168.33.255", 68);
+    const bcast_ip = try compute_broadcast_from_cidr_and_ip(args.lease_cidr, args.server_addr);
+    const broadcast_addr = std.Io.net.IpAddress{ .ip4 = .{ .bytes = bcast_ip, .port = 68 } };
 
     std.log.info("tiny-dhcp server listening...", .{});
 
@@ -187,22 +224,28 @@ pub fn main(init: std.process.Init) !void {
             const data = msg.data[i + 2 .. value_end];
             if (op == 53) {
                 bootp_header.op = BOOTP_OP_REPLY;
-                bootp_header.yiaddr = &args.lease_addr;
                 bootp_header.siaddr = &args.server_addr;
+                bootp_header.yiaddr = &args.lease_addr;
                 bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
                 if (data.len >= 1) {
                     const dhcp_packet_type: DHCPPacketType = @enumFromInt(data[0]);
+
+                    // TODO: we want to construct a dhcp packet from the client, currently the DHCPPacket is desgined to be constructed with bespoke values
+                    // from command line args and whatever we want a DHCPOptions struct eventually and we pass that to the DHCPPacket
+                    // also we want to be able to parse out the clients requested values and send stuff based on that, right now what we have is fine tho
 
                     switch (dhcp_packet_type) {
                         .DISCOVER => {
                             // if we get a discover packet we build an OFFER packet
                             var offer_buf: [300]u8 = undefined;
 
-                            var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .OFFER, args.lease_cidr, args.lease_gw, args.server_addr);
+                            var dhcp_options: DHCPOptions = .{ .lease_duration = args.lease_duration, .dhcp_packet_type = .OFFER, .lease_cidr = args.lease_cidr, .server_addr = args.server_addr, .lease_gw = args.lease_gw };
+
+                            var dhcp_packet = DHCPPacket.init(&bootp_header, &dhcp_options);
                             try dhcp_packet.write_to_buf(&offer_buf);
 
-                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..268]);
+                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..300]);
 
                             std.log.info("OFFER SENT", .{});
                         },
@@ -210,10 +253,12 @@ pub fn main(init: std.process.Init) !void {
                             // if we get a request packet we build an ACK packet
                             var ack_buf: [300]u8 = undefined;
 
-                            var dhcp_packet = DHCPPacket.init(&bootp_header, args.lease_duration, .ACK, args.lease_cidr, args.lease_gw, args.server_addr);
+                            var dhcp_options: DHCPOptions = .{ .lease_duration = args.lease_duration, .dhcp_packet_type = .ACK, .lease_cidr = args.lease_cidr, .server_addr = args.server_addr, .lease_gw = args.lease_gw };
+
+                            var dhcp_packet = DHCPPacket.init(&bootp_header, &dhcp_options);
                             try dhcp_packet.write_to_buf(&ack_buf);
 
-                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..268]);
+                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..300]);
 
                             std.log.info("ACK SENT", .{});
                         },
