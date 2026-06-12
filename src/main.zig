@@ -50,7 +50,7 @@ pub fn main(init: std.process.Init) !void {
                 bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
                 if (data.len >= 1) {
-                    const dhcp_packet_type: dhcp.DHCPPacketType = @enumFromInt(data[0]);
+                    const dhcp_packet_type: dhcp.DHCPPacketType = std.enums.fromInt(dhcp.DHCPPacketType, data[0]) orelse break;
 
                     // TODO: we want to construct a dhcp packet from the client, currently the DHCPPacket is desgined to be constructed with bespoke values
                     // from command line args and whatever we want a DHCPOptions struct eventually and we pass that to the DHCPPacket
