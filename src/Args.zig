@@ -7,6 +7,7 @@ lease_duration: u32 = 50,
 lease_cidr: u8 = 24,
 lease_gw: [4]u8 = .{ 192, 168, 33, 1 },
 server_addr: [4]u8 = .{ 192, 168, 33, 4 },
+verbose: bool = false,
 
 pub fn parse(init: std.process.Init) !Args {
     var result: Args = .{};
@@ -58,6 +59,8 @@ pub fn parse(init: std.process.Init) !Args {
                 help(process_name);
             };
             result.lease_gw = try parse_ipv4(raw);
+        } else if (std.mem.eql(u8, arg, "--verbose") or std.mem.eql(u8, arg, "-v")) {
+            result.verbose = true;
         } else {
             std.log.err("unknown option: {s}", .{arg});
             help(process_name);
