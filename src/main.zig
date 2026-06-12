@@ -36,7 +36,7 @@ pub const DHCPPacket = struct {
 
         const subnet_mask = try cidr_to_subnet_mask(self.dhcp_options.lease_cidr.?);
 
-        if (out.len < 268) return error.BufferTooSmall;
+        if (out.len < 300) return error.BufferTooSmall;
 
         out[0] = self.bootp_header.op;
         out[1] = self.bootp_header.htype;
@@ -163,20 +163,14 @@ const DHCP_MAGIC_COOKIE = [4]u8{ 0x63, 0x82, 0x53, 0x63 };
 
 fn compute_broadcast_from_cidr_and_ip(cidr: u8, ip: [4]u8) ![4]u8 {
     var sm = try cidr_to_subnet_mask(cidr);
-    std.debug.print("SUBNET MASK: {any}\n", .{sm});
-
     for (sm, 0..) |x, i| {
-        sm[i] = 255 - x;
+        sm[i] = x ^ 0xff;
     }
-
-    std.debug.print("SUBNET MASK AFTER: {any}\n", .{sm});
 
     var broadcast_addr: [4]u8 = undefined;
     for (ip, 0..) |x, i| {
         broadcast_addr[i] = x | sm[i];
     }
-
-    std.debug.print("BROADCAST: {any}\n", .{broadcast_addr});
 
     return broadcast_addr;
 }
