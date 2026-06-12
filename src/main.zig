@@ -106,7 +106,7 @@ pub const DHCPPacket = struct {
         }
 
         // end options
-        out[slice_len] = 255;
+        out[240 + slice_len] = 255;
     }
 };
 pub const DHCPOptions = struct {
