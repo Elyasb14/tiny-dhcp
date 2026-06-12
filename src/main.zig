@@ -234,7 +234,13 @@ pub fn main(init: std.process.Init) !void {
                             // if we get a discover packet we build an OFFER packet
                             var offer_buf: [300]u8 = undefined;
 
-                            var dhcp_options: DHCPOptions = .{ .lease_duration = args.lease_duration, .dhcp_packet_type = .OFFER, .lease_cidr = args.lease_cidr, .server_addr = args.server_addr, .lease_gw = args.lease_gw };
+                            var dhcp_options: DHCPOptions = .{
+                                .lease_duration = args.lease_duration,
+                                .dhcp_packet_type = .OFFER,
+                                .lease_cidr = args.lease_cidr,
+                                .server_addr = args.server_addr,
+                                .lease_gw = args.lease_gw,
+                            };
 
                             var dhcp_packet = DHCPPacket.init(&bootp_header, &dhcp_options);
                             try dhcp_packet.write_to_buf(&offer_buf);
@@ -247,7 +253,13 @@ pub fn main(init: std.process.Init) !void {
                             // if we get a request packet we build an ACK packet
                             var ack_buf: [300]u8 = undefined;
 
-                            var dhcp_options: DHCPOptions = .{ .lease_duration = args.lease_duration, .dhcp_packet_type = .ACK, .lease_cidr = args.lease_cidr, .server_addr = args.server_addr, .lease_gw = args.lease_gw };
+                            var dhcp_options: DHCPOptions = .{
+                                .lease_duration = args.lease_duration,
+                                .dhcp_packet_type = .ACK,
+                                .lease_cidr = args.lease_cidr,
+                                .server_addr = args.server_addr,
+                                .lease_gw = args.lease_gw,
+                            };
 
                             var dhcp_packet = DHCPPacket.init(&bootp_header, &dhcp_options);
                             try dhcp_packet.write_to_buf(&ack_buf);
