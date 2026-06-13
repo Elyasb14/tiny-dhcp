@@ -1,4 +1,12 @@
 pub const std = @import("std");
+const t = std.testing;
+
+test cidr_to_subnet_mask {
+    try t.expectEqual(cidr_to_subnet_mask(24), .{ 255, 255, 255, 0 });
+    try t.expectEqual(cidr_to_subnet_mask(16), .{ 255, 255, 0, 0 });
+    try t.expectEqual(cidr_to_subnet_mask(0), .{ 0, 0, 0, 0 });
+    try t.expectEqual(cidr_to_subnet_mask(32), .{ 255, 255, 255, 255 });
+}
 
 pub fn cidr_to_subnet_mask(cidr: u8) ![4]u8 {
     if (cidr > 32) return error.InvalidCidr;
@@ -159,6 +167,13 @@ pub const BootpHeader = struct {
 pub const BOOTP_OP_REPLY: u8 = 2;
 pub const DHCP_OPTIONS_OFFSET: usize = 240;
 pub const DHCP_MAGIC_COOKIE = [4]u8{ 0x63, 0x82, 0x53, 0x63 };
+
+test compute_broadcast_from_cidr_and_ip {
+    try t.expectEqual(compute_broadcast_from_cidr_and_ip(24, .{ 192, 168, 33, 7 }), .{ 192, 168, 33, 255 });
+    try t.expectEqual(compute_broadcast_from_cidr_and_ip(25, .{ 192, 168, 33, 7 }), .{ 192, 168, 33, 127 });
+    try t.expectEqual(compute_broadcast_from_cidr_and_ip(0, .{ 192, 168, 33, 7 }), .{ 255, 255, 255, 255 });
+    try t.expectEqual(compute_broadcast_from_cidr_and_ip(32, .{ 192, 168, 33, 7 }), .{ 192, 168, 33, 7 });
+}
 
 pub fn compute_broadcast_from_cidr_and_ip(cidr: u8, ip: [4]u8) ![4]u8 {
     var sm = try cidr_to_subnet_mask(cidr);
