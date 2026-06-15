@@ -174,6 +174,7 @@ test compute_broadcast_from_cidr_and_ip {
     try t.expectEqual(compute_broadcast_from_cidr_and_ip(0, .{ 192, 168, 33, 7 }), .{ 255, 255, 255, 255 });
     try t.expectEqual(compute_broadcast_from_cidr_and_ip(32, .{ 192, 168, 33, 7 }), .{ 192, 168, 33, 7 });
     try t.expectEqual(compute_broadcast_from_cidr_and_ip(24, .{ 192, 168, 33, 0 }), .{ 192, 168, 33, 255 });
+    try t.expectEqual(compute_broadcast_from_cidr_and_ip(24, .{ 192, 168, 33, 255 }), .{ 192, 168, 33, 255 });
 }
 
 pub fn compute_broadcast_from_cidr_and_ip(cidr: u8, ip: [4]u8) ![4]u8 {
