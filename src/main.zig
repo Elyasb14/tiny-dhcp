@@ -1,6 +1,6 @@
 const std = @import("std");
 const Args = @import("Args.zig");
-const dhcp = @import("dhcp.zig");
+const dhcp = @import("dhcp");
 
 pub fn main(init: std.process.Init) !void {
     const args = try Args.parse(init);
