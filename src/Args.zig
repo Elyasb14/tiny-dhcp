@@ -90,10 +90,10 @@ fn help(process_name: []const u8) noreturn {
         \\
         \\OPTIONS:
         \\  --lease-addr <ipv4>      IP to offer/ack (default: 192.168.33.7)
-        \\  --server-addr            IP addr of dhcp server (default: 192.168.33.4)
+        \\  --server-addr <ipv4>     IP addr of dhcp server (default: 192.168.33.4)
         \\  --lease-duration <secs>  Lease time in seconds (default: 50)
-        \\  --lease-cidr                   Cidr for subnet mask (default: 24)
-        \\  --lease-gw               IP of gateway for offer/ack (default: 192.168.33.1)
+        \\  --lease-cidr <0-32>      Cidr for subnet mask (default: 24)
+        \\  --lease-gw <ipv4>        IP of gateway for offer/ack (default: 192.168.33.1)
         \\  -h, --help               Show this help message
         \\
         \\EXAMPLE:
