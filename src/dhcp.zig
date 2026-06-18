@@ -4,6 +4,7 @@ const t = std.testing;
 test mask_to_cidr {
     try t.expectEqual(24, mask_to_cidr(.{ 255, 255, 255, 0 }));
     try t.expectEqual(29, mask_to_cidr(.{ 255, 255, 255, 248 }));
+    try t.expectEqual(16, mask_to_cidr(.{ 255, 255, 0, 0 }));
 }
 
 pub fn mask_to_cidr(mask: [4]u8) u8 {
