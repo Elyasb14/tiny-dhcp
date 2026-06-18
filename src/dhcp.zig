@@ -1,23 +1,22 @@
 pub const std = @import("std");
 const t = std.testing;
 
+test mask_to_cidr {
+    try t.expectEqual(24, mask_to_cidr(.{ 255, 255, 255, 0 }));
+    try t.expectEqual(29, mask_to_cidr(.{ 255, 255, 255, 248 }));
+}
+
+pub fn mask_to_cidr(mask: [4]u8) u8 {
+    const zeros = @ctz(std.mem.readInt(u32, &@bitCast(mask), .big));
+    const cidr = 32 - zeros;
+    return cidr;
+}
+
 test cidr_to_subnet_mask {
     try t.expectEqual(cidr_to_subnet_mask(24), .{ 255, 255, 255, 0 });
     try t.expectEqual(cidr_to_subnet_mask(16), .{ 255, 255, 0, 0 });
     try t.expectEqual(cidr_to_subnet_mask(0), .{ 0, 0, 0, 0 });
     try t.expectEqual(cidr_to_subnet_mask(32), .{ 255, 255, 255, 255 });
-}
-
-pub fn mask_to_cidr(mask: [4]u8) usize {
-    const mask_u32: u32 = @intCast(mask);
-    var cidr: usize = 0;
-    while (mask_u32 > 0) {
-        if (mask_u32 & 1) {
-            cidr += 1;
-        }
-        mask_u32 >>= 1;
-    }
-    return cidr;
 }
 
 pub fn cidr_to_subnet_mask(cidr: u8) ![4]u8 {
@@ -136,7 +135,7 @@ pub const DHCPOptions = struct {
     server_addr: ?[4]u8 = null,
     parameter_request_list: ?[]u8 = null,
 
-    pub fn init(buf: []u8) !DHCPOptions {
+    pub fn extract_from_incoming_packet(buf: []u8) !DHCPOptions {
         var options = DHCPOptions{};
         var count: usize = 0;
 
@@ -147,22 +146,30 @@ pub const DHCPOptions = struct {
 
             switch (option_type) {
                 51 => {
-                    options.lease_duration = val;
+                    options.lease_duration = std.mem.readInt(u32, val[0..4], .big);
                 },
                 1 => {
-                    options.lease_cidr = mask_to_cidr(val);
+                    if (len == 4) {
+                        options.lease_cidr = mask_to_cidr(val[0..4].*);
+                    }
                 },
                 3 => {
-                    options.lease_gw = val;
+                    if (len == 4)
+                        options.lease_gw = val[0..4].*;
                 },
                 54 => {
-                    options.server_addr = val;
+                    if (len == 4)
+                        options.server_addr = val[0..4].*;
                 },
                 55 => {
                     options.parameter_request_list = val;
                 },
                 255 => {
                     return options;
+                },
+                else => {
+                    std.log.err("unsupported dhcp option: {d}", .{option_type});
+                    return error.UnsupportedOptionType;
                 },
             }
 

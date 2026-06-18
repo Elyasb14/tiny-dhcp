@@ -79,7 +79,7 @@ pub fn main(init: std.process.Init) !void {
                 bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
                 if (data.len >= 1) {
-                    var received_dhcp_options: dhcp.DHCPOptions = .{};
+                    var received_dhcp_options = try dhcp.DHCPOptions.extract_from_incoming_packet(msg.data[240..]);
 
                     var received_pkt: dhcp.DHCPPacket = .init(&bootp_header, &received_dhcp_options);
                     std.debug.print("PACKET: {any}\n", .{&received_pkt});
