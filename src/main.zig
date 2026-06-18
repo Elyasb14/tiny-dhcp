@@ -79,6 +79,11 @@ pub fn main(init: std.process.Init) !void {
                 bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
                 if (data.len >= 1) {
+                    var received_dhcp_options: dhcp.DHCPOptions = .{};
+
+                    var received_pkt: dhcp.DHCPPacket = .init(&bootp_header, &received_dhcp_options);
+                    std.debug.print("PACKET: {any}\n", .{&received_pkt});
+
                     const dhcp_packet_type: dhcp.DHCPPacketType = std.enums.fromInt(dhcp.DHCPPacketType, data[0]) orelse {
                         std.log.warn("dhcp packet type not supported: {d}", .{data[0]});
                         break;
@@ -92,6 +97,7 @@ pub fn main(init: std.process.Init) !void {
 
                     switch (dhcp_packet_type) {
                         .DISCOVER => {
+                            // if we get a discover packet we build an OFFER packet
                             if (args.verbose) {
                                 std.log.info("building OFFER for {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2} -> yiaddr={d}.{d}.{d}.{d}  gw={d}.{d}.{d}.{d}  server={d}.{d}.{d}.{d}  lease={}s  cidr={}", .{
                                     bootp_header.chaddr[0], bootp_header.chaddr[1], bootp_header.chaddr[2],
@@ -104,10 +110,9 @@ pub fn main(init: std.process.Init) !void {
                                 });
                             }
 
-                            // if we get a discover packet we build an OFFER packet
                             var offer_buf: [300]u8 = undefined;
 
-                            var dhcp_options: dhcp.DHCPOptions = .{
+                            var options: dhcp.DHCPOptions = .{
                                 .lease_duration = args.lease_duration,
                                 .dhcp_packet_type = .OFFER,
                                 .lease_cidr = args.lease_cidr,
@@ -115,7 +120,7 @@ pub fn main(init: std.process.Init) !void {
                                 .lease_gw = args.lease_gw,
                             };
 
-                            var dhcp_packet = dhcp.DHCPPacket.init(&bootp_header, &dhcp_options);
+                            var dhcp_packet = dhcp.DHCPPacket.init(&bootp_header, &options);
                             try dhcp_packet.write_to_buf(&offer_buf);
 
                             try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..300]);
@@ -123,6 +128,7 @@ pub fn main(init: std.process.Init) !void {
                             std.log.info("OFFER SENT", .{});
                         },
                         .REQUEST => {
+                            // if we get a request packet we build an ACK packet
                             if (args.verbose) {
                                 std.log.info("building ACK for {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2} -> yiaddr={d}.{d}.{d}.{d}  gw={d}.{d}.{d}.{d}  server={d}.{d}.{d}.{d}  lease={}s  cidr={}", .{
                                     bootp_header.chaddr[0], bootp_header.chaddr[1], bootp_header.chaddr[2],
@@ -135,7 +141,6 @@ pub fn main(init: std.process.Init) !void {
                                 });
                             }
 
-                            // if we get a request packet we build an ACK packet
                             var ack_buf: [300]u8 = undefined;
 
                             var dhcp_options: dhcp.DHCPOptions = .{

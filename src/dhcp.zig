@@ -8,6 +8,18 @@ test cidr_to_subnet_mask {
     try t.expectEqual(cidr_to_subnet_mask(32), .{ 255, 255, 255, 255 });
 }
 
+pub fn mask_to_cidr(mask: [4]u8) usize {
+    const mask_u32: u32 = @intCast(mask);
+    var cidr: usize = 0;
+    while (mask_u32 > 0) {
+        if (mask_u32 & 1) {
+            cidr += 1;
+        }
+        mask_u32 >>= 1;
+    }
+    return cidr;
+}
+
 pub fn cidr_to_subnet_mask(cidr: u8) ![4]u8 {
     if (cidr > 32) return error.InvalidCidr;
     const mask_u32: u32 = if (cidr == 0) 0 else (@as(u32, 0xFFFFFFFF) << @intCast(32 - cidr));
@@ -122,6 +134,42 @@ pub const DHCPOptions = struct {
     lease_cidr: ?u8 = null,
     lease_gw: ?[4]u8 = null,
     server_addr: ?[4]u8 = null,
+    parameter_request_list: ?[]u8 = null,
+
+    pub fn init(buf: []u8) !DHCPOptions {
+        var options = DHCPOptions{};
+        var count: usize = 0;
+
+        while (count < buf.len) {
+            const option_type = buf[count];
+            const len = buf[count + 1];
+            const val = buf[count + 2 .. 2 + len];
+
+            switch (option_type) {
+                51 => {
+                    options.lease_duration = val;
+                },
+                1 => {
+                    options.lease_cidr = mask_to_cidr(val);
+                },
+                3 => {
+                    options.lease_gw = val;
+                },
+                54 => {
+                    options.server_addr = val;
+                },
+                55 => {
+                    options.parameter_request_list = val;
+                },
+                255 => {
+                    return options;
+                },
+            }
+
+            count += len + 2;
+        }
+        return error.NeverGotEndByte255;
+    }
 };
 
 pub const BootpHeader = struct {
