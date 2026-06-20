@@ -135,17 +135,34 @@ pub const DHCPOptions = struct {
     lease_gw: ?[4]u8 = null,
     server_addr: ?[4]u8 = null,
     parameter_request_list: ?[]u8 = null,
+    pkt_type: ?DHCPPacketType = null,
+    hostname: ?[]const u8 = null,
+    client_id: ?[]const u8 = null,
+    requested_ip: ?[4]u8 = null,
 
     pub fn extract_from_incoming_packet(buf: []u8) !DHCPOptions {
         var options = DHCPOptions{};
-        var count: usize = 0;
+        var i: usize = 0;
 
-        while (count < buf.len) {
-            const option_type = buf[count];
-            const len = buf[count + 1];
-            const val = buf[count + 2 .. 2 + len];
+        while (i < buf.len) {
+            const option_type = buf[i];
+            const len = buf[i + 1];
+            const val = buf[i + 2 .. i + 2 + len];
 
             switch (option_type) {
+                50 => {
+                    if (len == 4)
+                        options.requested_ip = val[0..4].*;
+                },
+                61 => {
+                    options.client_id = val[0..len];
+                },
+                12 => {
+                    options.hostname = val[0..len];
+                },
+                53 => {
+                    options.pkt_type = @enumFromInt(val[0]);
+                },
                 51 => {
                     options.lease_duration = std.mem.readInt(u32, val[0..4], .big);
                 },
@@ -174,7 +191,7 @@ pub const DHCPOptions = struct {
                 },
             }
 
-            count += len + 2;
+            i += 2 + len;
         }
         return error.NeverGotEndByte255;
     }
