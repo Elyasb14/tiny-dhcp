@@ -17,12 +17,20 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const args_mod = b.createModule(.{
+        .root_source_file = b.path("src/Args.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const exe = b.addExecutable(.{
         .name = "tiny-dhcp",
         .root_module = exe_mod,
     });
 
+    dhcp_mod.addImport("Args", args_mod);
     exe.root_module.addImport("dhcp", dhcp_mod);
+    exe.root_module.addImport("Args", args_mod);
     b.installArtifact(exe);
 
     const test_exe = b.addTest(.{ .root_module = dhcp_mod });

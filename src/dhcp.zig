@@ -1,4 +1,5 @@
 pub const std = @import("std");
+pub const Args = @import("Args");
 const t = std.testing;
 
 test mask_to_cidr {
@@ -139,8 +140,36 @@ pub const DHCPOptions = struct {
     client_id: ?[]const u8 = null,
     requested_ip: ?[4]u8 = null,
     max_msg_size: ?u16 = null,
+    lease_dns: ?[4]u8 = null,
+    lease_ntp: ?[4]u8 = null,
 
-    pub fn extract_from_incoming_packet(buf: []u8) !DHCPOptions {
+    pub fn init_from_param_request_list(buf: []u8, args: Args) DHCPOptions {
+        var options = DHCPOptions{};
+        for (buf) |param| {
+            switch (param) {
+                1 => {
+                    options.lease_cidr = args.lease_cidr;
+                },
+                3 => {
+                    options.lease_gw = args.lease_gw;
+                },
+                6 => {
+                    options.lease_dns = args.lease_gw;
+                },
+                42 => {
+                    options.lease_ntp = args.lease_gw;
+                },
+                else => {
+                    std.log.warn("option not supported: {d}", .{param});
+                    continue;
+                },
+            }
+        }
+
+        return options;
+    }
+
+    pub fn init_from_incoming_dhcp_packet(buf: []u8) !DHCPOptions {
         var options = DHCPOptions{};
         var i: usize = 0;
 
@@ -244,6 +273,7 @@ pub const BootpHeader = struct {
 };
 
 pub const BOOTP_OP_REPLY: u8 = 2;
+pub const BOOTP_OP_REQUEST: u8 = 1;
 pub const DHCP_OPTIONS_OFFSET: usize = 240;
 pub const DHCP_MAGIC_COOKIE = [4]u8{ 0x63, 0x82, 0x53, 0x63 };
 
