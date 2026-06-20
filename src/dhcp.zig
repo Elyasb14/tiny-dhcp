@@ -14,10 +14,10 @@ pub fn mask_to_cidr(mask: [4]u8) u8 {
 }
 
 test cidr_to_subnet_mask {
-    try t.expectEqual(cidr_to_subnet_mask(24), .{ 255, 255, 255, 0 });
-    try t.expectEqual(cidr_to_subnet_mask(16), .{ 255, 255, 0, 0 });
-    try t.expectEqual(cidr_to_subnet_mask(0), .{ 0, 0, 0, 0 });
-    try t.expectEqual(cidr_to_subnet_mask(32), .{ 255, 255, 255, 255 });
+    try t.expectEqual(try cidr_to_subnet_mask(24), .{ 255, 255, 255, 0 });
+    try t.expectEqual(try cidr_to_subnet_mask(16), .{ 255, 255, 0, 0 });
+    try t.expectEqual(try cidr_to_subnet_mask(0), .{ 0, 0, 0, 0 });
+    try t.expectEqual(try cidr_to_subnet_mask(32), .{ 255, 255, 255, 255 });
 }
 
 pub fn cidr_to_subnet_mask(cidr: u8) ![4]u8 {
@@ -77,7 +77,7 @@ pub const DHCPPacket = struct {
         var slice_len: usize = 0;
 
         // dhcp message type
-        if (self.dhcp_options.dhcp_packet_type) |dhcp_type| {
+        if (self.dhcp_options.pkt_type) |dhcp_type| {
             out[240] = 53;
             out[241] = 1;
             out[242] = @intFromEnum(dhcp_type);
@@ -130,7 +130,6 @@ pub const DHCPPacket = struct {
 };
 pub const DHCPOptions = struct {
     lease_duration: ?u32 = null,
-    dhcp_packet_type: ?DHCPPacketType = null,
     lease_cidr: ?u8 = null,
     lease_gw: ?[4]u8 = null,
     server_addr: ?[4]u8 = null,
@@ -139,6 +138,7 @@ pub const DHCPOptions = struct {
     hostname: ?[]const u8 = null,
     client_id: ?[]const u8 = null,
     requested_ip: ?[4]u8 = null,
+    max_msg_size: ?u16 = null,
 
     pub fn extract_from_incoming_packet(buf: []u8) !DHCPOptions {
         var options = DHCPOptions{};
@@ -154,6 +154,9 @@ pub const DHCPOptions = struct {
                     if (len == 4)
                         options.requested_ip = val[0..4].*;
                 },
+                57 => {
+                    options.max_msg_size = std.mem.readInt(u16, val[0..2], .big);
+                },
                 61 => {
                     options.client_id = val[0..len];
                 },
@@ -161,7 +164,10 @@ pub const DHCPOptions = struct {
                     options.hostname = val[0..len];
                 },
                 53 => {
-                    options.pkt_type = @enumFromInt(val[0]);
+                    options.pkt_type = std.enums.fromInt(DHCPPacketType, val[0]) orelse {
+                        std.log.warn("dhcp packet type not supported: {d}", .{val[0]});
+                        continue;
+                    };
                 },
                 51 => {
                     options.lease_duration = std.mem.readInt(u32, val[0..4], .big);

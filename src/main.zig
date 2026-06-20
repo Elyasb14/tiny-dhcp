@@ -56,116 +56,89 @@ pub fn main(init: std.process.Init) !void {
             });
         }
 
-        var i: usize = dhcp.DHCP_OPTIONS_OFFSET;
-        while (i < msg.data.len) {
-            const op = msg.data[i];
-            if (op == 0) {
-                i += 1;
-                continue;
-            }
+        var received_dhcp_options = try dhcp.DHCPOptions.extract_from_incoming_packet(msg.data[dhcp.DHCP_OPTIONS_OFFSET..]);
 
-            if (op == 255) break;
-            if (i + 1 >= msg.data.len) break;
+        const received_pkt: dhcp.DHCPPacket = .init(&bootp_header, &received_dhcp_options);
 
-            const len = msg.data[i + 1];
-            const value_end = i + 2 + len;
-            if (value_end > msg.data.len) break;
+        std.debug.print("PACKET: {any}\n", .{received_pkt.dhcp_options});
 
-            const data = msg.data[i + 2 .. value_end];
-            if (op == 53) {
-                bootp_header.op = dhcp.BOOTP_OP_REPLY;
-                bootp_header.siaddr = &args.server_addr;
-                bootp_header.yiaddr = &args.lease_addr;
-                bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
+        bootp_header.op = dhcp.BOOTP_OP_REPLY;
+        bootp_header.siaddr = &args.server_addr;
+        bootp_header.yiaddr = &args.lease_addr;
+        bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
-                if (data.len >= 1) {
-                    var received_dhcp_options = try dhcp.DHCPOptions.extract_from_incoming_packet(msg.data[240..]);
+        if (args.verbose) std.log.info("DHCP message type: {s}", .{@tagName(received_pkt.dhcp_options.pkt_type.?)});
 
-                    var received_pkt: dhcp.DHCPPacket = .init(&bootp_header, &received_dhcp_options);
-                    std.debug.print("PACKET: {any}\n", .{&received_pkt});
+        // TODO: we want to construct a dhcp packet from the client, currently the DHCPPacket is desgined to be constructed with bespoke values
+        // from command line args and whatever we want a DHCPOptions struct eventually and we pass that to the DHCPPacket
+        // also we want to be able to parse out the clients requested values and send stuff based on that, right now what we have is fine tho
 
-                    const dhcp_packet_type: dhcp.DHCPPacketType = std.enums.fromInt(dhcp.DHCPPacketType, data[0]) orelse {
-                        std.log.warn("dhcp packet type not supported: {d}", .{data[0]});
-                        break;
-                    };
-
-                    if (args.verbose) std.log.info("DHCP message type: {s}", .{@tagName(dhcp_packet_type)});
-
-                    // TODO: we want to construct a dhcp packet from the client, currently the DHCPPacket is desgined to be constructed with bespoke values
-                    // from command line args and whatever we want a DHCPOptions struct eventually and we pass that to the DHCPPacket
-                    // also we want to be able to parse out the clients requested values and send stuff based on that, right now what we have is fine tho
-
-                    switch (dhcp_packet_type) {
-                        .DISCOVER => {
-                            // if we get a discover packet we build an OFFER packet
-                            if (args.verbose) {
-                                std.log.info("building OFFER for {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2} -> yiaddr={d}.{d}.{d}.{d}  gw={d}.{d}.{d}.{d}  server={d}.{d}.{d}.{d}  lease={}s  cidr={}", .{
-                                    bootp_header.chaddr[0], bootp_header.chaddr[1], bootp_header.chaddr[2],
-                                    bootp_header.chaddr[3], bootp_header.chaddr[4], bootp_header.chaddr[5],
-                                    args.lease_addr[0],     args.lease_addr[1],     args.lease_addr[2],
-                                    args.lease_addr[3],     args.lease_gw[0],       args.lease_gw[1],
-                                    args.lease_gw[2],       args.lease_gw[3],       args.server_addr[0],
-                                    args.server_addr[1],    args.server_addr[2],    args.server_addr[3],
-                                    args.lease_duration,    args.lease_cidr,
-                                });
-                            }
-
-                            var offer_buf: [300]u8 = undefined;
-
-                            var options: dhcp.DHCPOptions = .{
-                                .lease_duration = args.lease_duration,
-                                .dhcp_packet_type = .OFFER,
-                                .lease_cidr = args.lease_cidr,
-                                .server_addr = args.server_addr,
-                                .lease_gw = args.lease_gw,
-                            };
-
-                            var dhcp_packet = dhcp.DHCPPacket.init(&bootp_header, &options);
-                            try dhcp_packet.write_to_buf(&offer_buf);
-
-                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..300]);
-
-                            std.log.info("OFFER SENT", .{});
-                        },
-                        .REQUEST => {
-                            // if we get a request packet we build an ACK packet
-                            if (args.verbose) {
-                                std.log.info("building ACK for {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2} -> yiaddr={d}.{d}.{d}.{d}  gw={d}.{d}.{d}.{d}  server={d}.{d}.{d}.{d}  lease={}s  cidr={}", .{
-                                    bootp_header.chaddr[0], bootp_header.chaddr[1], bootp_header.chaddr[2],
-                                    bootp_header.chaddr[3], bootp_header.chaddr[4], bootp_header.chaddr[5],
-                                    args.lease_addr[0],     args.lease_addr[1],     args.lease_addr[2],
-                                    args.lease_addr[3],     args.lease_gw[0],       args.lease_gw[1],
-                                    args.lease_gw[2],       args.lease_gw[3],       args.server_addr[0],
-                                    args.server_addr[1],    args.server_addr[2],    args.server_addr[3],
-                                    args.lease_duration,    args.lease_cidr,
-                                });
-                            }
-
-                            var ack_buf: [300]u8 = undefined;
-
-                            var dhcp_options: dhcp.DHCPOptions = .{
-                                .lease_duration = args.lease_duration,
-                                .dhcp_packet_type = .ACK,
-                                .lease_cidr = args.lease_cidr,
-                                .server_addr = args.server_addr,
-                                .lease_gw = args.lease_gw,
-                            };
-
-                            var dhcp_packet = dhcp.DHCPPacket.init(&bootp_header, &dhcp_options);
-                            try dhcp_packet.write_to_buf(&ack_buf);
-
-                            try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..300]);
-
-                            std.log.info("ACK SENT", .{});
-                        },
-                        else => {
-                            std.log.warn("dhcp packet type not supported: {d}", .{dhcp_packet_type});
-                        },
-                    }
+        switch (received_pkt.dhcp_options.pkt_type.?) {
+            .DISCOVER => {
+                // if we get a discover packet we build an OFFER packet
+                if (args.verbose) {
+                    std.log.info("building OFFER for {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2} -> yiaddr={d}.{d}.{d}.{d}  gw={d}.{d}.{d}.{d}  server={d}.{d}.{d}.{d}  lease={}s  cidr={}", .{
+                        bootp_header.chaddr[0], bootp_header.chaddr[1], bootp_header.chaddr[2],
+                        bootp_header.chaddr[3], bootp_header.chaddr[4], bootp_header.chaddr[5],
+                        args.lease_addr[0],     args.lease_addr[1],     args.lease_addr[2],
+                        args.lease_addr[3],     args.lease_gw[0],       args.lease_gw[1],
+                        args.lease_gw[2],       args.lease_gw[3],       args.server_addr[0],
+                        args.server_addr[1],    args.server_addr[2],    args.server_addr[3],
+                        args.lease_duration,    args.lease_cidr,
+                    });
                 }
-            }
 
-            i = value_end;
+                var offer_buf: [300]u8 = undefined;
+
+                var options: dhcp.DHCPOptions = .{
+                    .lease_duration = args.lease_duration,
+                    .pkt_type = .OFFER,
+                    .lease_cidr = args.lease_cidr,
+                    .server_addr = args.server_addr,
+                    .lease_gw = args.lease_gw,
+                };
+
+                var dhcp_packet = dhcp.DHCPPacket.init(&bootp_header, &options);
+                try dhcp_packet.write_to_buf(&offer_buf);
+
+                try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..300]);
+
+                std.log.info("OFFER SENT", .{});
+            },
+            .REQUEST => {
+                // if we get a request packet we build an ACK packet
+                if (args.verbose) {
+                    std.log.info("building ACK for {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2} -> yiaddr={d}.{d}.{d}.{d}  gw={d}.{d}.{d}.{d}  server={d}.{d}.{d}.{d}  lease={}s  cidr={}", .{
+                        bootp_header.chaddr[0], bootp_header.chaddr[1], bootp_header.chaddr[2],
+                        bootp_header.chaddr[3], bootp_header.chaddr[4], bootp_header.chaddr[5],
+                        args.lease_addr[0],     args.lease_addr[1],     args.lease_addr[2],
+                        args.lease_addr[3],     args.lease_gw[0],       args.lease_gw[1],
+                        args.lease_gw[2],       args.lease_gw[3],       args.server_addr[0],
+                        args.server_addr[1],    args.server_addr[2],    args.server_addr[3],
+                        args.lease_duration,    args.lease_cidr,
+                    });
+                }
+
+                var ack_buf: [300]u8 = undefined;
+
+                var dhcp_options: dhcp.DHCPOptions = .{
+                    .lease_duration = args.lease_duration,
+                    .pkt_type = .ACK,
+                    .lease_cidr = args.lease_cidr,
+                    .server_addr = args.server_addr,
+                    .lease_gw = args.lease_gw,
+                };
+
+                var dhcp_packet = dhcp.DHCPPacket.init(&bootp_header, &dhcp_options);
+                try dhcp_packet.write_to_buf(&ack_buf);
+
+                try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..300]);
+
+                std.log.info("ACK SENT", .{});
+            },
+            else => {
+                std.log.warn("dhcp packet type not supported: {d}", .{received_dhcp_options.pkt_type.?});
+            },
         }
     }
 }
