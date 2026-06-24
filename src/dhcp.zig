@@ -125,6 +125,25 @@ pub const DHCPPacket = struct {
             slice_len += 6;
         }
 
+        if (self.dhcp_options.lease_dns) |dns| {
+            out[267] = 6;
+            out[268] = 4;
+            out[269] = dns[0];
+            out[270] = dns[1];
+            out[271] = dns[2];
+            out[272] = dns[3];
+            slice_len += 6;
+        }
+
+        if (self.dhcp_options.lease_ntp) |ntp| {
+            out[273] = 4;
+            out[274] = 4;
+            out[275] = ntp[0];
+            out[276] = ntp[1];
+            out[277] = ntp[2];
+            out[278] = ntp[3];
+            slice_len += 6;
+        }
         // end options
         out[240 + slice_len] = 255;
     }
@@ -160,7 +179,7 @@ pub const DHCPOptions = struct {
                     options.lease_ntp = args.lease_gw;
                 },
                 else => {
-                    std.log.warn("option not supported: {d}", .{param});
+                    std.log.warn("option not supported in param request list: {d}", .{param});
                     continue;
                 },
             }
