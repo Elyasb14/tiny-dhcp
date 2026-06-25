@@ -173,10 +173,10 @@ pub const DHCPOptions = struct {
                     options.lease_gw = args.lease_gw;
                 },
                 6 => {
-                    options.lease_dns = args.lease_gw;
+                    options.lease_dns = args.lease_dns;
                 },
                 42 => {
-                    options.lease_ntp = args.lease_gw;
+                    options.lease_ntp = args.lease_ntp;
                 },
                 else => {
                     if (args.verbose) std.log.warn("option not supported in param request list: {d}", .{param});

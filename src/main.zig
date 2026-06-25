@@ -10,8 +10,6 @@ pub fn handle_packet_type(
     server: Server,
     resp_type: dhcp.DHCPPacketType,
 ) !void {
-
-    // if we get a discover packet we build an OFFER packet
     if (args.verbose) {
         std.log.info("building OFFER for {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2} -> yiaddr={d}.{d}.{d}.{d}  gw={d}.{d}.{d}.{d}  server={d}.{d}.{d}.{d}  lease={}s  cidr={}", .{
             bootp_header.chaddr[0], bootp_header.chaddr[1], bootp_header.chaddr[2],
