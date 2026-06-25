@@ -2,6 +2,11 @@ pub const std = @import("std");
 pub const Args = @import("Args");
 const t = std.testing;
 
+pub const BOOTP_OP_REPLY: u8 = 2;
+pub const BOOTP_OP_REQUEST: u8 = 1;
+pub const DHCP_OPTIONS_OFFSET: usize = 240;
+pub const DHCP_MAGIC_COOKIE = [4]u8{ 0x63, 0x82, 0x53, 0x63 };
+
 test mask_to_cidr {
     try t.expectEqual(24, mask_to_cidr(.{ 255, 255, 255, 0 }));
     try t.expectEqual(29, mask_to_cidr(.{ 255, 255, 255, 248 }));
@@ -290,11 +295,6 @@ pub const BootpHeader = struct {
         };
     }
 };
-
-pub const BOOTP_OP_REPLY: u8 = 2;
-pub const BOOTP_OP_REQUEST: u8 = 1;
-pub const DHCP_OPTIONS_OFFSET: usize = 240;
-pub const DHCP_MAGIC_COOKIE = [4]u8{ 0x63, 0x82, 0x53, 0x63 };
 
 test compute_broadcast_from_cidr_and_ip {
     try t.expectEqual(compute_broadcast_from_cidr_and_ip(24, .{ 192, 168, 33, 7 }), .{ 192, 168, 33, 255 });

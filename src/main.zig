@@ -8,7 +8,7 @@ pub fn handle_packet_type(
     bootp_header: *dhcp.BootpHeader,
     param_req_list_options: *dhcp.DHCPOptions,
     server: Server,
-    resp_type: dhcp.DHCPPacketType,
+    response_type: dhcp.DHCPPacketType,
 ) !void {
     if (args.verbose) {
         std.log.info("building OFFER for {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2} -> yiaddr={d}.{d}.{d}.{d}  gw={d}.{d}.{d}.{d}  server={d}.{d}.{d}.{d}  lease={}s  cidr={}", .{
@@ -25,17 +25,17 @@ pub fn handle_packet_type(
     var offer_buf: [300]u8 = undefined;
 
     param_req_list_options.lease_duration = args.lease_duration;
-    param_req_list_options.pkt_type = resp_type;
+    param_req_list_options.pkt_type = response_type;
     param_req_list_options.server_addr = args.server_addr;
     param_req_list_options.server_addr = args.lease_gw;
 
-    var dhcp_packet = dhcp.DHCPPacket.init(bootp_header, param_req_list_options);
+    var dhcp_packet: dhcp.DHCPPacket = .init(bootp_header, param_req_list_options);
     try dhcp_packet.write_to_buf(&offer_buf);
 
     try std.Io.net.Socket.send(&server.socket, io, &server.broadcast_addr, offer_buf[0..300]);
 
     std.log.info("{s} sent to {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}", .{
-        @tagName(resp_type),
+        @tagName(response_type),
         bootp_header.chaddr[0],
         bootp_header.chaddr[1],
         bootp_header.chaddr[2],
@@ -86,7 +86,7 @@ pub fn main(init: std.process.Init) !void {
             continue;
         }
 
-        var bootp_header = dhcp.BootpHeader.init(msg.data);
+        var bootp_header: dhcp.BootpHeader = .init(msg.data);
 
         if (!std.mem.eql(u8, msg.data[236..240], &dhcp.DHCP_MAGIC_COOKIE)) {
             std.log.debug("not a dhcp packet...", .{});
@@ -109,14 +109,14 @@ pub fn main(init: std.process.Init) !void {
             });
         }
 
-        var received_dhcp_options = try dhcp.DHCPOptions.init_from_incoming_dhcp_packet(msg.data[dhcp.DHCP_OPTIONS_OFFSET..]);
+        var received_dhcp_options: dhcp.DHCPOptions = try .init_from_incoming_dhcp_packet(msg.data[dhcp.DHCP_OPTIONS_OFFSET..]);
 
         const received_pkt: dhcp.DHCPPacket = .init(&bootp_header, &received_dhcp_options);
 
         var param_req_list_options: dhcp.DHCPOptions = undefined;
 
         if (received_dhcp_options.parameter_request_list) |list| {
-            param_req_list_options = dhcp.DHCPOptions.init_from_param_request_list(list, args);
+            param_req_list_options = .init_from_param_request_list(list, args);
         }
 
         if (received_pkt.bootp_header.op == dhcp.BOOTP_OP_REQUEST) {
