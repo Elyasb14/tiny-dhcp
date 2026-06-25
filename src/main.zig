@@ -7,8 +7,7 @@ pub fn handle_packet_type(
     args: Args,
     bootp_header: *dhcp.BootpHeader,
     param_req_list_options: *dhcp.DHCPOptions,
-    socket: std.Io.net.Socket,
-    broadcast_addr: std.Io.net.IpAddress,
+    server: Server,
     resp_type: dhcp.DHCPPacketType,
 ) !void {
 
@@ -35,7 +34,7 @@ pub fn handle_packet_type(
     var dhcp_packet = dhcp.DHCPPacket.init(bootp_header, param_req_list_options);
     try dhcp_packet.write_to_buf(&offer_buf);
 
-    try std.Io.net.Socket.send(&socket, io, &broadcast_addr, offer_buf[0..300]);
+    try std.Io.net.Socket.send(&server.socket, io, &server.broadcast_addr, offer_buf[0..300]);
 
     std.log.info("{s} sent to {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}", .{
         @tagName(resp_type),
@@ -48,20 +47,30 @@ pub fn handle_packet_type(
     });
 }
 
+pub const Server = struct {
+    socket: std.Io.net.Socket,
+    broadcast_addr: std.Io.net.IpAddress,
+
+    pub fn init(io: std.Io, addr: []const u8, args: Args) !Server {
+        const ip = try std.Io.net.IpAddress.parseIp4(addr, 67);
+        const socket = try ip.bind(io, .{ .protocol = .udp, .mode = .dgram, .allow_broadcast = true });
+        const broadcast_ip = try dhcp.compute_broadcast_from_cidr_and_ip(args.lease_cidr, args.server_addr);
+        const broadcast_addr = std.Io.net.IpAddress{ .ip4 = .{ .bytes = broadcast_ip, .port = 68 } };
+
+        return .{ .socket = socket, .broadcast_addr = broadcast_addr };
+    }
+};
+
 pub fn main(init: std.process.Init) !void {
     const args = try Args.parse(init);
     const io = init.io;
 
-    const addr = try std.Io.net.IpAddress.parseIp4("0.0.0.0", 67);
-
-    var socket = try addr.bind(io, .{ .protocol = .udp, .mode = .dgram, .allow_broadcast = true });
     var recv_buffer: [1024]u8 = undefined;
 
-    const broadcast_ip = try dhcp.compute_broadcast_from_cidr_and_ip(args.lease_cidr, args.server_addr);
-    const broadcast_addr = std.Io.net.IpAddress{ .ip4 = .{ .bytes = broadcast_ip, .port = 68 } };
+    const server = try Server.init(io, "0.0.0.0", args);
 
     if (args.verbose) {
-        std.log.info("broadcast address: {d}.{d}.{d}.{d}/{}", .{ broadcast_ip[0], broadcast_ip[1], broadcast_ip[2], broadcast_ip[3], args.lease_cidr });
+        std.log.info("broadcast address: {d}.{d}.{d}.{d}/{}", .{ server.broadcast_addr.ip4.bytes[0], server.broadcast_addr.ip4.bytes[1], server.broadcast_addr.ip4.bytes[2], server.broadcast_addr.ip4.bytes[3], args.lease_cidr });
         std.log.info("server addr: {d}.{d}.{d}.{d}", .{ args.server_addr[0], args.server_addr[1], args.server_addr[2], args.server_addr[3] });
         std.log.info("lease addr: {d}.{d}.{d}.{d}  gw: {d}.{d}.{d}.{d}  duration: {}s", .{
             args.lease_addr[0],  args.lease_addr[1], args.lease_addr[2], args.lease_addr[3],
@@ -73,7 +82,7 @@ pub fn main(init: std.process.Init) !void {
     std.log.info("tiny-dhcp server listening...", .{});
 
     while (true) {
-        const msg = try socket.receive(io, &recv_buffer);
+        const msg = try server.socket.receive(io, &recv_buffer);
         if (msg.data.len < 240) {
             if (args.verbose) std.log.info("ignored short packet ({d} bytes)", .{msg.data.len});
             continue;
@@ -122,10 +131,10 @@ pub fn main(init: std.process.Init) !void {
 
             switch (received_pkt.dhcp_options.pkt_type.?) {
                 .DISCOVER => {
-                    try handle_packet_type(io, args, &bootp_header, &param_req_list_options, socket, broadcast_addr, .OFFER);
+                    try handle_packet_type(io, args, &bootp_header, &param_req_list_options, server, .OFFER);
                 },
                 .REQUEST => {
-                    try handle_packet_type(io, args, &bootp_header, &param_req_list_options, socket, broadcast_addr, .ACK);
+                    try handle_packet_type(io, args, &bootp_header, &param_req_list_options, server, .ACK);
                 },
                 else => {
                     std.log.warn("dhcp packet type not supported: {d}", .{received_dhcp_options.pkt_type.?});
