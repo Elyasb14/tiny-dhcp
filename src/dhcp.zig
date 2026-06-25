@@ -2,42 +2,6 @@ pub const std = @import("std");
 pub const Args = @import("Args");
 const t = std.testing;
 
-pub const BOOTP_OP_REPLY: u8 = 2;
-pub const BOOTP_OP_REQUEST: u8 = 1;
-pub const DHCP_OPTIONS_OFFSET: usize = 240;
-pub const DHCP_MAGIC_COOKIE = [4]u8{ 0x63, 0x82, 0x53, 0x63 };
-
-test mask_to_cidr {
-    try t.expectEqual(24, mask_to_cidr(.{ 255, 255, 255, 0 }));
-    try t.expectEqual(29, mask_to_cidr(.{ 255, 255, 255, 248 }));
-    try t.expectEqual(16, mask_to_cidr(.{ 255, 255, 0, 0 }));
-}
-
-pub fn mask_to_cidr(mask: [4]u8) u8 {
-    const zeros = @ctz(std.mem.readInt(u32, &@bitCast(mask), .big));
-    const cidr = 32 - zeros;
-    return cidr;
-}
-
-test cidr_to_subnet_mask {
-    try t.expectEqual(try cidr_to_subnet_mask(24), .{ 255, 255, 255, 0 });
-    try t.expectEqual(try cidr_to_subnet_mask(16), .{ 255, 255, 0, 0 });
-    try t.expectEqual(try cidr_to_subnet_mask(0), .{ 0, 0, 0, 0 });
-    try t.expectEqual(try cidr_to_subnet_mask(32), .{ 255, 255, 255, 255 });
-}
-
-pub fn cidr_to_subnet_mask(cidr: u8) ![4]u8 {
-    if (cidr > 32) return error.InvalidCidr;
-    const mask_u32: u32 = if (cidr == 0) 0 else (@as(u32, 0xFFFFFFFF) << @intCast(32 - cidr));
-
-    return .{
-        @intCast((mask_u32 >> 24) & 0xFF),
-        @intCast((mask_u32 >> 16) & 0xFF),
-        @intCast((mask_u32 >> 8) & 0xFF),
-        @intCast(mask_u32 & 0xFF),
-    };
-}
-
 pub const DHCPPacketType = enum(u8) {
     DISCOVER = 1,
     OFFER = 2,
@@ -56,8 +20,8 @@ pub const DHCPPacket = struct {
     pub fn write_to_buf(self: *DHCPPacket, out: []u8) !void {
         @memset(out, 0);
 
-        var ld_as_bytes: [4]u8 = undefined;
-        std.mem.writeInt(u32, &ld_as_bytes, self.dhcp_options.lease_duration.?, .big);
+        var lease_duration_as_bytes: [4]u8 = undefined;
+        std.mem.writeInt(u32, &lease_duration_as_bytes, self.dhcp_options.lease_duration.?, .big);
 
         const subnet_mask = try cidr_to_subnet_mask(self.dhcp_options.lease_cidr.?);
 
@@ -113,10 +77,10 @@ pub const DHCPPacket = struct {
         // lease duration (i32)
         out[255] = 51;
         out[256] = 4;
-        out[257] = ld_as_bytes[0];
-        out[258] = ld_as_bytes[1];
-        out[259] = ld_as_bytes[2];
-        out[260] = ld_as_bytes[3];
+        out[257] = lease_duration_as_bytes[0];
+        out[258] = lease_duration_as_bytes[1];
+        out[259] = lease_duration_as_bytes[2];
+        out[260] = lease_duration_as_bytes[3];
         slice_len += 6;
 
         if (self.dhcp_options.lease_gw) |gw| {
@@ -296,6 +260,11 @@ pub const BootpHeader = struct {
     }
 };
 
+pub const BOOTP_OP_REPLY: u8 = 2;
+pub const BOOTP_OP_REQUEST: u8 = 1;
+pub const DHCP_OPTIONS_OFFSET: usize = 240;
+pub const DHCP_MAGIC_COOKIE = [4]u8{ 0x63, 0x82, 0x53, 0x63 };
+
 test compute_broadcast_from_cidr_and_ip {
     try t.expectEqual(compute_broadcast_from_cidr_and_ip(24, .{ 192, 168, 33, 7 }), .{ 192, 168, 33, 255 });
     try t.expectEqual(compute_broadcast_from_cidr_and_ip(25, .{ 192, 168, 33, 7 }), .{ 192, 168, 33, 127 });
@@ -318,4 +287,35 @@ pub fn compute_broadcast_from_cidr_and_ip(cidr: u8, ip: [4]u8) ![4]u8 {
     }
 
     return broadcast_addr;
+}
+
+test mask_to_cidr {
+    try t.expectEqual(24, mask_to_cidr(.{ 255, 255, 255, 0 }));
+    try t.expectEqual(29, mask_to_cidr(.{ 255, 255, 255, 248 }));
+    try t.expectEqual(16, mask_to_cidr(.{ 255, 255, 0, 0 }));
+}
+
+pub fn mask_to_cidr(mask: [4]u8) u8 {
+    const zeros = @ctz(std.mem.readInt(u32, &@bitCast(mask), .big));
+    const cidr = 32 - zeros;
+    return cidr;
+}
+
+test cidr_to_subnet_mask {
+    try t.expectEqual(try cidr_to_subnet_mask(24), .{ 255, 255, 255, 0 });
+    try t.expectEqual(try cidr_to_subnet_mask(16), .{ 255, 255, 0, 0 });
+    try t.expectEqual(try cidr_to_subnet_mask(0), .{ 0, 0, 0, 0 });
+    try t.expectEqual(try cidr_to_subnet_mask(32), .{ 255, 255, 255, 255 });
+}
+
+pub fn cidr_to_subnet_mask(cidr: u8) ![4]u8 {
+    if (cidr > 32) return error.InvalidCidr;
+    const mask_u32: u32 = if (cidr == 0) 0 else (@as(u32, 0xFFFFFFFF) << @intCast(32 - cidr));
+
+    return .{
+        @intCast((mask_u32 >> 24) & 0xFF),
+        @intCast((mask_u32 >> 16) & 0xFF),
+        @intCast((mask_u32 >> 8) & 0xFF),
+        @intCast(mask_u32 & 0xFF),
+    };
 }

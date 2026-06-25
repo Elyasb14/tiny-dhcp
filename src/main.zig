@@ -2,7 +2,7 @@ const std = @import("std");
 const Args = @import("Args");
 const dhcp = @import("dhcp");
 
-pub fn handle_packet_type(
+pub fn handle_response(
     io: std.Io,
     args: Args,
     bootp_header: *dhcp.BootpHeader,
@@ -125,18 +125,20 @@ pub fn main(init: std.process.Init) !void {
             bootp_header.yiaddr = &args.lease_addr;
             bootp_header.ciaddr = &[_]u8{ 0, 0, 0, 0 };
 
-            if (args.verbose) std.log.info("DHCP message type: {s}", .{@tagName(received_pkt.dhcp_options.pkt_type.?)});
+            if (received_pkt.dhcp_options.pkt_type) |pkt_type| {
+                if (args.verbose) std.log.info("DHCP message type: {s}", .{@tagName(pkt_type)});
 
-            switch (received_pkt.dhcp_options.pkt_type.?) {
-                .DISCOVER => {
-                    try handle_packet_type(io, args, &bootp_header, &param_req_list_options, server, .OFFER);
-                },
-                .REQUEST => {
-                    try handle_packet_type(io, args, &bootp_header, &param_req_list_options, server, .ACK);
-                },
-                else => {
-                    std.log.warn("dhcp packet type not supported: {d}", .{received_dhcp_options.pkt_type.?});
-                },
+                switch (pkt_type) {
+                    .DISCOVER => {
+                        try handle_response(io, args, &bootp_header, &param_req_list_options, server, .OFFER);
+                    },
+                    .REQUEST => {
+                        try handle_response(io, args, &bootp_header, &param_req_list_options, server, .ACK);
+                    },
+                    else => {
+                        std.log.warn("dhcp packet type not supported: {d}", .{received_dhcp_options.pkt_type.?});
+                    },
+                }
             }
         }
     }
