@@ -60,10 +60,10 @@ pub fn main(init: std.process.Init) !void {
 
         const received_pkt: dhcp.DHCPPacket = .init(&bootp_header, &received_dhcp_options);
 
-        var options_request_list: dhcp.DHCPOptions = undefined;
+        var param_req_list_options: dhcp.DHCPOptions = undefined;
 
         if (received_dhcp_options.parameter_request_list) |list| {
-            options_request_list = dhcp.DHCPOptions.init_from_param_request_list(list, args);
+            param_req_list_options = dhcp.DHCPOptions.init_from_param_request_list(list, args);
         }
 
         if (received_pkt.bootp_header.op == dhcp.BOOTP_OP_REQUEST) {
@@ -91,25 +91,24 @@ pub fn main(init: std.process.Init) !void {
 
                     var offer_buf: [300]u8 = undefined;
 
-                    // var options: dhcp.DHCPOptions = .{
-                    //     .lease_duration = args.lease_duration,
-                    //     .pkt_type = .OFFER,
-                    //     .lease_cidr = args.lease_cidr,
-                    //     .server_addr = args.server_addr,
-                    //     .lease_gw = args.lease_gw,
-                    // };
+                    param_req_list_options.lease_duration = args.lease_duration;
+                    param_req_list_options.pkt_type = .OFFER;
+                    param_req_list_options.server_addr = args.server_addr;
+                    param_req_list_options.server_addr = args.lease_gw;
 
-                    options_request_list.lease_duration = args.lease_duration;
-                    options_request_list.pkt_type = .OFFER;
-                    options_request_list.server_addr = args.server_addr;
-                    options_request_list.server_addr = args.lease_gw;
-
-                    var dhcp_packet = dhcp.DHCPPacket.init(&bootp_header, &options_request_list);
+                    var dhcp_packet = dhcp.DHCPPacket.init(&bootp_header, &param_req_list_options);
                     try dhcp_packet.write_to_buf(&offer_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, offer_buf[0..300]);
 
-                    std.log.info("OFFER SENT", .{});
+                    std.log.info("OFFER sent to {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}", .{
+                        bootp_header.chaddr[0],
+                        bootp_header.chaddr[1],
+                        bootp_header.chaddr[2],
+                        bootp_header.chaddr[3],
+                        bootp_header.chaddr[4],
+                        bootp_header.chaddr[5],
+                    });
                 },
                 .REQUEST => {
                     // if we get a request packet we build an ACK packet
@@ -127,24 +126,23 @@ pub fn main(init: std.process.Init) !void {
 
                     var ack_buf: [300]u8 = undefined;
 
-                    // var dhcp_options: dhcp.DHCPOptions = .{
-                    //     .lease_duration = args.lease_duration,
-                    //     .pkt_type = .ACK,
-                    //     .lease_cidr = args.lease_cidr,
-                    //     .server_addr = args.server_addr,
-                    //     .lease_gw = args.lease_gw,
-                    // };
-
-                    options_request_list.lease_duration = args.lease_duration;
-                    options_request_list.pkt_type = .ACK;
-                    options_request_list.server_addr = args.server_addr;
-                    options_request_list.server_addr = args.lease_gw;
-                    var dhcp_packet = dhcp.DHCPPacket.init(&bootp_header, &options_request_list);
+                    param_req_list_options.lease_duration = args.lease_duration;
+                    param_req_list_options.pkt_type = .ACK;
+                    param_req_list_options.server_addr = args.server_addr;
+                    param_req_list_options.server_addr = args.lease_gw;
+                    var dhcp_packet = dhcp.DHCPPacket.init(&bootp_header, &param_req_list_options);
                     try dhcp_packet.write_to_buf(&ack_buf);
 
                     try std.Io.net.Socket.send(&server, io, &broadcast_addr, ack_buf[0..300]);
 
-                    std.log.info("ACK SENT", .{});
+                    std.log.info("ACK sent to {x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}:{x:0>2}", .{
+                        bootp_header.chaddr[0],
+                        bootp_header.chaddr[1],
+                        bootp_header.chaddr[2],
+                        bootp_header.chaddr[3],
+                        bootp_header.chaddr[4],
+                        bootp_header.chaddr[5],
+                    });
                 },
                 else => {
                     std.log.warn("dhcp packet type not supported: {d}", .{received_dhcp_options.pkt_type.?});

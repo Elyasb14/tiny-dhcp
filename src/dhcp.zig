@@ -179,7 +179,7 @@ pub const DHCPOptions = struct {
                     options.lease_ntp = args.lease_gw;
                 },
                 else => {
-                    std.log.warn("option not supported in param request list: {d}", .{param});
+                    if (args.verbose) std.log.warn("option not supported in param request list: {d}", .{param});
                     continue;
                 },
             }
